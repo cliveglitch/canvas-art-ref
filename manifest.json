@@ -1,0 +1,9 @@
+{
+  "id": "canvas-art-ref-plugin",
+  "name": "Canvas Art Ref",
+  "version": "0.2.0",
+  "minAppVersion": "1.12.3",
+  "description": "Arrange and resize reference images, and choose asset folders, in native Canvas.",
+  "author": "cliveglitch",
+  "isDesktopOnly": false
+}
