@@ -34,7 +34,8 @@ export class StorageRouting extends Component {
         if (!view?.canvas || view.canvas.readonly || element?.closest?.('input, textarea, [contenteditable="true"], .cm-editor')) return;
         const scope = { canvas: view.canvas };
         this.scope = scope;
-        queueMicrotask(() => { if (this.scope === scope) this.scope = undefined; });
+        // Native events run microtasks between listeners, before Canvas handles the import.
+        win.setTimeout(() => { if (this.scope === scope) this.scope = undefined; }, 0);
       }, { capture: true });
     }
   }

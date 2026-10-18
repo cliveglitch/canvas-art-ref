@@ -15,6 +15,8 @@ Select image cards, or a group containing images, then right-click:
 
 These actions also appear in the command palette. They affect selected image cards and images fully contained within selected groups. Notes and edges are retained. Groups expand when necessary to keep their images inside. Every layout operation is one native undo step; image source files are never resized or cropped.
 
+Right-click a group and choose **Optimize group** to fit its boundary around all fully contained cards, including notes and nested groups, without moving or resizing the contents. Padding is 20 canvas pixels on the sides and bottom, and 40 at the top. Empty groups stay unchanged. Select several groups to optimize them together in one undo step; selected nested groups are fitted before their parents. The command palette also offers **Optimize selected groups**, which can be assigned a hotkey in Obsidian settings.
+
 ## Asset folders
 
 Set default **Images folder** and **Notes folder** in **Settings → Canvas Art Ref**. Right-click empty canvas space and select **Canvas folders…** to override them for one canvas. Leave a field blank to inherit; enter `/` for the vault root. Paths are inside the vault. Saving a folder creates it if needed.
@@ -40,6 +42,10 @@ For live testing, build in `<Vault>/.obsidian/plugins/canvas-art-ref-plugin/` an
 
 Native integration checks are in `tests/native-*.js`. Run `native-image-actions.js` using `scripts/obsidian-eval.ps1 -ScriptPath tests/native-image-actions.js -Vault "My vault"` to exercise all 18 actions, first/average normalization, native undo/redo, persistent addition order, menus, and reload cleanup in a separate test canvas. Results remain on `window.canvasArtRefImageChecks` and in the ignored `output/image-action-checks.json`. The earlier import and note checks use `native-setup.js`, followed by the smoke, interactions, lifecycle, and dialogs scripts. Tests do not edit existing boards.
 
+Run `native-storage-routing.js` with the same helper to check clipboard imports across event listener microtasks, image drops, missing image folders, and existing-file reuse. It removes its temporary canvas and imported fixtures, restores the previous tab, and writes `output/storage-routing-checks.json`.
+
 After successful image-action checks, run `native-image-cleanup.js` with the same helper to close their tabs and remove only their generated scratch folders. The previous active tab is restored. The test report remains in `output/`.
+
+Run `native-group-actions.js` with the same helper to check group menus, commands, padding, unchanged card data, nested selections, and native undo/redo. It cleans up its scratch canvas automatically, restores the previous tab, and writes `output/group-action-checks.json`.
 
 Canvas's live editing API is undocumented. The plugin uses 1.12.3 API typings and has been tested in Obsidian 1.14.4; native integration may require maintenance after app updates. Mobile-compatible APIs are used, but testing on physical iOS and Android devices is still needed.

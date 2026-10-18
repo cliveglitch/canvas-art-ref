@@ -1,6 +1,6 @@
-import { Component, TFile, type Menu } from 'obsidian';
-import { activeCanvas, imageSelection } from './bridge';
-import type { CanvasView, NativeCanvas } from './types';
+import { Component, Notice, TFile, type Menu } from 'obsidian';
+import { activeCanvas, groupSelection, imageSelection, optimizeGroups } from './bridge';
+import type { CanvasView, NativeCanvas, NodeData } from './types';
 import { ImageActions } from './actions';
 import type { ImageAction } from './action-catalog';
 import { ImageOrdering } from './ordering';
@@ -9,7 +9,7 @@ import { ensureFolder, uniqueNotePath } from '../storage/folders';
 import { foldersFor } from '../settings';
 import { CanvasFoldersModal, type SettingsHost } from '../ui/settings';
 import { NoteModal, ScaleModal } from '../ui/dialogs';
-import { imageMenu } from '../ui/menus';
+import { groupMenu, imageMenu } from '../ui/menus';
 
 export class CanvasIntegration extends Component {
   readonly actions: ImageActions;
@@ -27,8 +27,16 @@ export class CanvasIntegration extends Component {
   onload(): void {
     const workspace = this.host.app.workspace;
     this.register(() => { this.enabled = false; this.actions.stop(); });
-    this.registerEvent(workspace.on('canvas:selection-menu', (menu, canvas) => imageMenu(menu, canvas, imageSelection(canvas), this.actions, this.host.app)));
-    this.registerEvent(workspace.on('canvas:node-menu', (menu, node) => imageMenu(menu, node.canvas, imageSelection(node.canvas, node), this.actions, this.host.app)));
+    this.registerEvent(workspace.on('canvas:selection-menu', (menu, canvas) => {
+      imageMenu(menu, canvas, imageSelection(canvas), this.actions, this.host.app);
+      const groups = groupSelection(canvas);
+      groupMenu(menu, canvas, groups, () => this.optimize(canvas, groups));
+    }));
+    this.registerEvent(workspace.on('canvas:node-menu', (menu, node) => {
+      imageMenu(menu, node.canvas, imageSelection(node.canvas, node), this.actions, this.host.app);
+      const groups = groupSelection(node.canvas, node);
+      groupMenu(menu, node.canvas, groups, () => this.optimize(node.canvas, groups));
+    }));
     this.registerEvent(workspace.on('file-menu', (menu, file) => {
       if (file instanceof TFile && file.extension === 'canvas') menu.addItem(item => item.setTitle('Canvas folders…').setIcon('folder-cog').onClick(() => new CanvasFoldersModal(this.host, file.path).open()));
     }));
@@ -40,6 +48,11 @@ export class CanvasIntegration extends Component {
   run(action: ImageAction): void {
     const canvas = activeCanvas(this.host.app);
     if (canvas) void this.actions.run(canvas, action);
+  }
+  optimize(canvas = activeCanvas(this.host.app), groups?: NodeData[]): void {
+    if (!this.enabled || !canvas) return;
+    try { optimizeGroups(canvas, groups); }
+    catch (error) { new Notice(error instanceof Error ? error.message : 'Could not optimize the selected groups.'); }
   }
   scale(): void {
     const canvas = activeCanvas(this.host.app);

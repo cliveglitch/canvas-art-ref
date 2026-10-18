@@ -1,9 +1,15 @@
 import type { Plugin } from 'obsidian';
 import type { CanvasIntegration } from './integration';
 import { alignActions, arrangeActions, normalizeActions } from './action-catalog';
-import { activeCanvas, imageSelection } from './bridge';
+import { activeCanvas, groupSelection, imageSelection } from './bridge';
 
 export function registerCommands(plugin: Plugin, integration: CanvasIntegration): void {
+  plugin.addCommand({ id: 'optimize-groups', name: 'Optimize selected groups', checkCallback: checking => {
+    const canvas = activeCanvas(plugin.app);
+    const available = !!canvas && !canvas.readonly && groupSelection(canvas).length > 0;
+    if (available && !checking) integration.optimize();
+    return available;
+  } });
   for (const { id, name, action } of [...arrangeActions, ...alignActions, ...normalizeActions]) {
     plugin.addCommand({ id, name, checkCallback: checking => {
       const canvas = activeCanvas(plugin.app);

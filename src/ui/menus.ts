@@ -7,6 +7,11 @@ import type { App } from 'obsidian';
 
 // setSubmenu exists in the native Menu API but is not in the published typings.
 interface SubmenuItem { setSubmenu(): Menu }
+export function groupMenu(menu: Menu, canvas: NativeCanvas, groups: NodeData[], optimize: () => void): void {
+  if (canvas.readonly || !groups.length) return;
+  menu.addItem(item => item.setTitle(groups.length === 1 ? 'Optimize group' : 'Optimize groups').setIcon('minimize').onClick(optimize));
+}
+
 export function imageMenu(menu: Menu, canvas: NativeCanvas, images: NodeData[], actions: ImageActions, app: App): void {
   if (canvas.readonly || !images.length) return;
   for (const [title, icon, entries] of [

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { build } from 'esbuild';
 
 const bundle = await build({
-  stdin: { contents: `export * from './src/canvas/selection'; export * from './src/canvas/bridge'; export * from './src/layout/packing'; export * from './src/layout/sizing'; export * from './src/layout/alignment'; export * from './src/layout/ordering'; export * from './src/settings';`, resolveDir: process.cwd() },
+  stdin: { contents: `export * from './src/canvas/selection'; export * from './src/canvas/bridge'; export * from './src/layout/packing'; export * from './src/layout/sizing'; export * from './src/layout/alignment'; export * from './src/layout/ordering'; export * from './src/layout/groups'; export * from './src/settings';`, resolveDir: process.cwd() },
   bundle: true, platform: 'node', format: 'esm', write: false,
 });
 const api = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
@@ -96,3 +96,5 @@ test('folder overrides inherit independently and reject paths outside the vault 
 });
 
 await (await import('./image-actions.mjs')).checkImageActions(api, image);
+await (await import('./group-actions.mjs')).checkGroupActions(api, image);
+await import('./storage-routing.mjs');
