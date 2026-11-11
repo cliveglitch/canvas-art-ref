@@ -1,5 +1,5 @@
-import { Component, Notice, debounce } from 'obsidian';
-import type { SettingsHost } from '../ui/settings';
+import { Component } from 'obsidian';
+import type { PluginData } from '../plugin-data';
 import type { CanvasNode, NativeCanvas } from './types';
 import { isImage, type NodeData } from './data';
 
@@ -7,13 +7,9 @@ import { isImage, type NodeData } from './data';
 export class ImageOrdering extends Component {
   private enabled = true;
   private attached = new WeakSet<NativeCanvas>();
-  private indexes = new WeakMap<NativeCanvas, { list: string[]; ids: Set<string> }>();
-  private persist = debounce(() => {
-    void this.host.saveSettings().catch(() => new Notice('Could not save image addition order.'));
-  }, 300, true);
-  constructor(private host: SettingsHost) { super(); }
+  constructor(private data: PluginData) { super(); }
 
-  onload(): void { this.register(() => { this.enabled = false; this.persist.run(); }); }
+  onload(): void { this.register(() => { this.enabled = false; }); }
 
   attach(canvas: NativeCanvas): void {
     this.record(canvas, canvas.getData().nodes.filter(isImage).map(node => node.id));
@@ -36,17 +32,12 @@ export class ImageOrdering extends Component {
   /** The canvas's addition order, after recording any of `images` not yet seen. */
   additions(canvas: NativeCanvas, images: NodeData[]): readonly string[] {
     this.record(canvas, images.map(node => node.id));
-    return this.host.settings.imageOrder[canvas.view.file?.path ?? ''] ?? [];
+    return this.data.additions(canvas.view.file?.path ?? '');
   }
 
   private record(canvas: NativeCanvas, ids: string[]): void {
     const path = canvas.view.file?.path;
     if (!this.enabled || !path || !ids.length) return;
-    const list = this.host.settings.imageOrder[path] ?? (this.host.settings.imageOrder[path] = []);
-    let index = this.indexes.get(canvas);
-    if (!index || index.list !== list) { index = { list, ids: new Set(list) }; this.indexes.set(canvas, index); }
-    let changed = false;
-    for (const id of ids) if (!index.ids.has(id)) { list.push(id); index.ids.add(id); changed = true; }
-    if (changed) this.persist();
+    this.data.recordAdditions(path, ids);
   }
 }

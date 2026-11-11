@@ -9,12 +9,13 @@ const nativeTest = async (name, body) => {
   const prefix = 'Canvas Art Ref test ' + id;
   const pluginId = 'canvas-art-ref-plugin';
   const plugin = () => app.plugins.plugins[pluginId];
+  const data = () => plugin().pluginData;
   const inside = path => path === root || path.startsWith(root + '/');
   const guard = path => { if (!inside(path)) throw new Error('Outside the test folder: ' + path); return path; };
   const wait = delay => new Promise(resolve => window.setTimeout(resolve, delay));
   const checks = [], leaves = [], created = [], fixtures = [], leaked = [];
   const previousLeaf = app.workspace.getMostRecentLeaf();
-  const original = structuredClone(plugin().settings);
+  const original = { folders: data().defaults, gap: data().gap, source: data().sizeSource };
   let failure;
   const t = {
     root, prefix, wait, plugin,
@@ -43,11 +44,10 @@ const nativeTest = async (name, body) => {
     },
     async canvasFolders(path, folders) {
       for (const value of [path, ...Object.values(folders).filter(Boolean)]) guard(value);
-      plugin().settings.canvases[guard(path)] = { images: '', notes: '', ...folders };
-      await plugin().saveSettings();
+      await data().setCanvasFolders(guard(path), folders);
     },
-    additionOrder: path => [...plugin().settings.imageOrder[guard(path)] ?? []],
-    sizeSource: () => plugin().settings.normalizeSource,
+    additionOrder: path => [...data().additions(guard(path))],
+    sizeSource: () => data().sizeSource,
   };
 
   const existing = app.vault.getAbstractFileByPath(base);
@@ -78,10 +78,9 @@ const nativeTest = async (name, body) => {
     if (folder) await app.vault.delete(folder, true);
     const parent = app.vault.getAbstractFileByPath(base);
     if (parent?.children?.length === 0) await app.vault.delete(parent, true);
-    const settings = plugin().settings;
-    for (const key of ['images', 'notes', 'gap', 'normalizeSource']) settings[key] = original[key];
-    for (const map of [settings.imageOrder, settings.canvases]) for (const path of Object.keys(map)) if (inside(path)) delete map[path];
-    await plugin().saveSettings();
+    if (JSON.stringify([data().defaults, data().gap]) !== JSON.stringify([original.folders, original.gap])) await data().setDefaults(original.folders, original.gap);
+    if (data().sizeSource !== original.source) await data().setSizeSource(original.source);
+    await data().forget(root);
     if (previousLeaf?.view?.containerEl?.isConnected) app.workspace.setActiveLeaf(previousLeaf, { focus: true });
   }
   if (!failure && leaked.length) failure = 'Created outside the test folder: ' + leaked.join(', ');

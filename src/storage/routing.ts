@@ -1,9 +1,8 @@
-import { Component, Notice, TFolder, type TFile } from 'obsidian';
+import { Component, Notice, TFolder, type App, type TFile } from 'obsidian';
 import type { Attachment, ImportApp, NativeCanvas } from '../canvas/types';
 import { activeCanvas } from '../canvas/bridge';
 import { isImagePath } from '../canvas/data';
-import { foldersFor } from '../settings';
-import type { SettingsHost } from '../ui/settings';
+import type { PluginData } from '../plugin-data';
 import { ensureFolder } from './folders';
 
 /** Route native imports; leave native selection, file reuse and node creation intact. */
@@ -11,7 +10,7 @@ export class StorageRouting extends Component {
   private enabled = true;
   private scope?: { canvas: NativeCanvas };
   private windows = new WeakSet<Window>();
-  constructor(private host: SettingsHost) { super(); }
+  constructor(private app: App, private data: PluginData) { super(); }
 
   onload(): void {
     this.register(() => { this.enabled = false; this.scope = undefined; });
@@ -25,7 +24,7 @@ export class StorageRouting extends Component {
     this.windows.add(win);
     for (const type of ['paste', 'drop'] as const) {
       this.registerDomEvent(win, type, event => {
-        const view = this.host.app.workspace.getLeavesOfType('canvas').find(leaf => {
+        const view = this.app.workspace.getLeavesOfType('canvas').find(leaf => {
           const candidate = (leaf.view as { canvas?: NativeCanvas }).canvas;
           return candidate && event.composedPath().includes(candidate.wrapperEl);
         })?.view as { canvas?: NativeCanvas } | undefined;
@@ -41,7 +40,7 @@ export class StorageRouting extends Component {
   }
 
   private patchImports(): void {
-    const app = this.host.app as ImportApp;
+    const app = this.app as ImportApp;
     if (typeof app.importAttachments !== 'function') return;
     // eslint-disable-next-line @typescript-eslint/unbound-method -- Preserve and restore the native method; invoke with its original receiver.
     const original = app.importAttachments;
@@ -49,7 +48,7 @@ export class StorageRouting extends Component {
     const routing = this;
     const wrapped = function(this: ImportApp, items: Attachment[], folder: TFolder | null): Promise<TFile[]> {
       const canvas = routing.enabled ? routing.scope?.canvas : undefined;
-      const setting = canvas?.view.file ? foldersFor(routing.host.settings, canvas.view.file.path).images : '';
+      const setting = canvas?.view.file ? routing.data.folders(canvas.view.file.path).images : '';
       if (!canvas || canvas.readonly || folder || !setting || !items.some(item => !item.isDirectory && isImagePath('image.' + item.extension))) return original.call(this, items, folder);
       // Capture the destination before awaiting so changing tabs cannot redirect the import.
       return routing.importTo(original.bind(this), items, setting).catch((error: unknown) => {
@@ -62,7 +61,7 @@ export class StorageRouting extends Component {
   }
 
   private async importTo(original: ImportApp['importAttachments'], items: Attachment[], setting: string): Promise<TFile[]> {
-    const folder = await ensureFolder(this.host.app, setting);
+    const folder = await ensureFolder(this.app, setting);
     const files: TFile[] = [];
     for (const item of items) {
       const image = !item.isDirectory && isImagePath('image.' + item.extension);
@@ -72,20 +71,20 @@ export class StorageRouting extends Component {
   }
 
   private patchNotes(): void {
-    const manager = this.host.app.fileManager;
+    const manager = this.app.fileManager;
     // eslint-disable-next-line @typescript-eslint/unbound-method -- Preserve and restore the native method; invoke with its original receiver.
     const original = manager.getNewFileParent;
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- A method wrapper needs both receivers.
     const routing = this;
     const wrapped = function(this: typeof manager, sourcePath: string, newFilePath?: string): TFolder {
-      const canvas = routing.enabled ? activeCanvas(routing.host.app) : undefined;
+      const canvas = routing.enabled ? activeCanvas(routing.app) : undefined;
       const canvasPath = routing.enabled && sourcePath?.endsWith('.canvas') ? sourcePath : !sourcePath ? canvas?.view.file?.path : undefined;
       const extension = newFilePath?.match(/\.([^/.]+)$/)?.[1]?.toLowerCase();
       const creators = (manager as typeof manager & { fileParentCreatorByType?: Record<string, unknown> }).fileParentCreatorByType;
       const markdown = !extension || extension === 'md' || (!!creators && !creators[extension]);
       if (canvasPath && markdown) {
-        const setting = foldersFor(routing.host.settings, canvasPath).notes;
-        const folder = setting === '/' ? routing.host.app.vault.getRoot() : routing.host.app.vault.getAbstractFileByPath(setting);
+        const setting = routing.data.folders(canvasPath).notes;
+        const folder = setting === '/' ? routing.app.vault.getRoot() : routing.app.vault.getAbstractFileByPath(setting);
         if (setting && folder instanceof TFolder) return folder;
       }
       return original.call(this, sourcePath, newFilePath);

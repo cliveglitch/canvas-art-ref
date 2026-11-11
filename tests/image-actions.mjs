@@ -6,7 +6,7 @@ const { ImageActions, sections } = api;
 const image = (id, x = 0, y = 0) => ({ id, x, y, width: 100, height: 100, type: 'file', file: id + '.png' });
 
 test('the catalog offers every image action and Optimize group as one command each, in menu order', () => {
-  const actions = new ImageActions({}, () => api.defaults(), {}, async () => {});
+  const actions = new ImageActions({}, {}, {});
   assert.deepEqual(actions.entries.map(entry => entry.id), [
     'pack-images', 'arrange-images-by-name', 'arrange-images-by-path', 'arrange-images-by-order', 'arrange-images-by-addition', 'arrange-images-randomly',
     'align-images-left', 'align-images-right', 'align-images-top', 'align-images-bottom', 'stack-images', 'distribute-images-horizontal', 'distribute-images-vertical',
@@ -17,7 +17,7 @@ test('the catalog offers every image action and Optimize group as one command ea
 });
 
 test('actions are available on an editable canvas with selected images or groups, and a right-clicked card wins', () => {
-  const actions = new ImageActions({}, () => api.defaults(), {}, async () => {});
+  const actions = new ImageActions({}, {}, {});
   const nodes = [{ id: 'g', type: 'group', x: 0, y: 0, width: 500, height: 500 }, image('inside', 10, 10), image('outside', 600, 600)];
   const canvas = { readonly: false, selection: new Set([{ id: 'g' }]), getData: () => ({ nodes, edges: [] }) };
   assert.equal(actions.available(canvas, 'images'), true);

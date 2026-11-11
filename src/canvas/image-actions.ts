@@ -7,7 +7,7 @@ import type { ImageOrdering } from './ordering';
 import { planLayout, type LayoutOperation } from '../layout/plan';
 import type { SortMemory } from '../layout/ordering';
 import type { SizeSource } from '../layout/sizing';
-import type { Settings } from '../settings';
+import type { PluginData } from '../plugin-data';
 import { ScaleModal } from '../ui/dialogs';
 
 /** One image action, or Optimize group, as offered by a command and a menu item. */
@@ -61,16 +61,15 @@ export class ImageActions {
   private sizes: ImageSizes;
   // Reverse on repeat remembers the last applied sort for each open canvas file.
   private memories = new WeakMap<NativeCanvas, { path: string; memory?: SortMemory }>();
-  constructor(private app: App, private settings: () => Settings, private ordering: ImageOrdering, private save: () => Promise<void>) {
+  constructor(private app: App, private data: PluginData, private ordering: ImageOrdering) {
     this.sizes = new ImageSizes(app);
   }
   stop(): void { this.enabled = false; }
 
-  get source(): SizeSource { return this.settings().normalizeSource; }
+  get source(): SizeSource { return this.data.sizeSource; }
   async setSource(source: SizeSource): Promise<void> {
     if (!this.enabled) return;
-    this.settings().normalizeSource = source;
-    try { await this.save(); } catch (error) { report(error, 'Could not save the size source.'); }
+    try { await this.data.setSizeSource(source); } catch (error) { report(error, 'Could not save the size source.'); }
   }
 
   /** Selected images, or selected groups. A right-clicked card outside the selection replaces it. */
@@ -116,7 +115,7 @@ export class ImageActions {
       const remembered = this.memories.get(canvas);
       const plan = planLayout({
         data: canvas.getData(), selection, operation, sizes,
-        gap: this.settings().gap, source: this.source,
+        gap: this.data.gap, source: this.source,
         aspect: canvas.wrapperEl.clientWidth / Math.max(1, canvas.wrapperEl.clientHeight),
         additions: operation.kind === 'arrange' ? this.ordering.additions(canvas, selection) : [],
         memory: remembered?.path === path ? remembered.memory : undefined,

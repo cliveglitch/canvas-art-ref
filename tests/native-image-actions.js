@@ -86,7 +86,7 @@ nativeTest('image actions', async t => {
   await run('name'); check(same(visualOrder(), ['a', 'b', 'c']), 'Repeating a sort reverses its order');
   const recorded = t.additionOrder(path);
   check(same(recorded.filter(id => selectedIds.includes(id)), ['a', 'b', 'c']), 'Addition order tracks native node insertion');
-  await t.plugin().saveSettings();
+  await t.plugin().pluginData.flush();
   await app.plugins.disablePlugin('canvas-art-ref-plugin');
   const nativeAdd = canvas.addNode;
   await app.plugins.enablePlugin('canvas-art-ref-plugin');
