@@ -24,6 +24,15 @@ nativeTest('image actions', async t => {
   const selectedIds = ['c', 'a', 'b'];
   const select = ids => canvas.updateSelection(() => { canvas.selection.clear(); for (const id of ids) canvas.selection.add(canvas.nodes.get(id)); });
   const geometry = data => data.nodes.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })).sort((a, b) => a.id.localeCompare(b.id));
+  // Padding of 20 at the sides and bottom and 40 at the top, give or take Canvas's pixel rounding.
+  const fitsContents = () => {
+    const group = canvas.nodes.get('group').getData();
+    const children = ['a', 'b', 'c', 'context'].map(id => canvas.nodes.get(id).getData());
+    const gap = edge => Math.min(...children.map(edge));
+    const near = (value, target) => Math.abs(value - target) <= 1;
+    return near(gap(node => node.x - group.x), 20) && near(gap(node => node.y - group.y), 40)
+      && near(gap(node => group.x + group.width - node.x - node.width), 20) && near(gap(node => group.y + group.height - node.y - node.height), 20);
+  };
   const restore = async (ids = selectedIds) => { canvas.setData(structuredClone(baseline)); await wait(60); canvas.requestPushHistory.run(); select(ids); };
   const definitions = [
     ['pack', 'pack-images'], ['name', 'arrange-images-by-name'], ['path', 'arrange-images-by-path'],
@@ -47,6 +56,7 @@ nativeTest('image actions', async t => {
       check(Math.abs(rect.width - rect.height * width / height) <= .51 * (1 + width / height), action + ': proportions retained for ' + id);
     }
     if (action === 'stack') check(same(after.nodes.map(node => node.id), before.nodes.map(node => node.id)), 'Stack retains native layer order');
+    check(fitsContents(), action + ': group fits its contents, as PureRef groups do');
     canvas.undo(); check(same(geometry(canvas.getData()), geometry(before)), action + ': one undo restores layout');
     canvas.redo(); check(same(geometry(canvas.getData()), geometry(after)), action + ': one redo restores layout');
   }

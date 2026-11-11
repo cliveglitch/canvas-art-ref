@@ -1,10 +1,24 @@
-import type { NodeData, Rect } from './types';
+/** The stable `.canvas` file format, and geometry on it. Nothing here depends on Obsidian's runtime. */
+export interface Rect { x: number; y: number; width: number; height: number }
+export interface NodeData extends Rect {
+  id: string;
+  type: string;
+  file?: string;
+  text?: string;
+  label?: string;
+  [key: string]: unknown;
+}
+export interface CanvasData {
+  nodes: NodeData[];
+  edges: { id: string; [key: string]: unknown }[];
+  [key: string]: unknown;
+}
 
 export const isImagePath = (path: string): boolean => /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(path);
 export const isImage = (node: NodeData): boolean => node.type === 'file' && typeof node.file === 'string' && isImagePath(node.file);
 export const contains = (outer: Rect, inner: Rect): boolean => inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
-export const overlaps = (a: Rect, b: Rect, gap = 0): boolean => a.x < b.x + b.width + gap && a.x + a.width + gap > b.x && a.y < b.y + b.height + gap && a.y + a.height + gap > b.y;
 
+/** Selected images: selected image cards, then each selected group's images in reading order. */
 export function selectedImages(nodes: NodeData[], selected: ReadonlySet<string>): NodeData[] {
   const byId = new Map(nodes.map(node => [node.id, node]));
   const result = new Map<string, NodeData>();

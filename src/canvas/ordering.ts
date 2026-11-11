@@ -1,14 +1,12 @@
 import { Component, Notice, debounce } from 'obsidian';
 import type { SettingsHost } from '../ui/settings';
-import type { CanvasNode, NativeCanvas, NodeData } from './types';
-import { isImage } from './selection';
-import { SortHistory, type OrderMode } from '../layout/ordering';
+import type { CanvasNode, NativeCanvas } from './types';
+import { isImage, type NodeData } from './data';
 
 /** Store insertion order separately from Canvas's mutable drawing order. */
 export class ImageOrdering extends Component {
   private enabled = true;
   private attached = new WeakSet<NativeCanvas>();
-  private histories = new WeakMap<NativeCanvas, { path: string; history: SortHistory }>();
   private indexes = new WeakMap<NativeCanvas, { list: string[]; ids: Set<string> }>();
   private persist = debounce(() => {
     void this.host.saveSettings().catch(() => new Notice('Could not save image addition order.'));
@@ -35,12 +33,10 @@ export class ImageOrdering extends Component {
     this.register(() => { const live = target.deref(); if (live?.addNode === wrapped) live.addNode = original; });
   }
 
-  prepare<T extends NodeData>(canvas: NativeCanvas, images: T[], mode: OrderMode): { images: T[]; accept: () => void } {
+  /** The canvas's addition order, after recording any of `images` not yet seen. */
+  additions(canvas: NativeCanvas, images: NodeData[]): readonly string[] {
     this.record(canvas, images.map(node => node.id));
-    const path = canvas.view.file?.path ?? '';
-    let stored = this.histories.get(canvas);
-    if (!stored || stored.path !== path) { stored = { path, history: new SortHistory() }; this.histories.set(canvas, stored); }
-    return stored.history.prepare(images, mode, this.host.settings.imageOrder[path] ?? []);
+    return this.host.settings.imageOrder[canvas.view.file?.path ?? ''] ?? [];
   }
 
   private record(canvas: NativeCanvas, ids: string[]): void {

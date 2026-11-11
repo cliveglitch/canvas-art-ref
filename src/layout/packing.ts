@@ -1,5 +1,4 @@
-import type { NodeData, Rect } from '../canvas/types';
-import { bounds } from '../canvas/selection';
+import { bounds, type NodeData, type Rect } from '../canvas/data';
 
 /** Placed rectangles bucketed into grid cells, so checking a position only scans its neighbourhood. */
 class Grid {

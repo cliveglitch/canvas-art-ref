@@ -1,6 +1,8 @@
 import { Component, Notice, TFile, type Menu } from 'obsidian';
-import { activeCanvas, groupSelection, imageSelection, optimizeGroups } from './bridge';
-import type { CanvasView, NativeCanvas, NodeData } from './types';
+import { activeCanvas, applyLayout, groupSelection, imageSelection } from './bridge';
+import type { CanvasView, NativeCanvas } from './types';
+import type { NodeData } from './data';
+import { planLayout } from '../layout/plan';
 import { ImageActions } from './actions';
 import type { ImageAction } from './action-catalog';
 import { ImageOrdering } from './ordering';
@@ -51,7 +53,7 @@ export class CanvasIntegration extends Component {
   }
   optimize(canvas = activeCanvas(this.host.app), groups?: NodeData[]): void {
     if (!this.enabled || !canvas) return;
-    try { optimizeGroups(canvas, groups); }
+    try { applyLayout(canvas, planLayout({ data: canvas.getData(), selection: groups ?? groupSelection(canvas), operation: { kind: 'optimize-groups' } }).changes); }
     catch (error) { new Notice(error instanceof Error ? error.message : 'Could not optimize the selected groups.'); }
   }
   scale(): void {

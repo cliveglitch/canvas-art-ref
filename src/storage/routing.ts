@@ -1,7 +1,7 @@
 import { Component, Notice, TFolder, type TFile } from 'obsidian';
 import type { Attachment, ImportApp, NativeCanvas } from '../canvas/types';
 import { activeCanvas } from '../canvas/bridge';
-import { isImagePath } from '../canvas/selection';
+import { isImagePath } from '../canvas/data';
 import { foldersFor } from '../settings';
 import type { SettingsHost } from '../ui/settings';
 import { ensureFolder } from './folders';

@@ -1,6 +1,7 @@
 import { Menu } from 'obsidian';
 import type { ImageActions } from '../canvas/actions';
-import type { NativeCanvas, NodeData } from '../canvas/types';
+import type { NativeCanvas } from '../canvas/types';
+import type { NodeData } from '../canvas/data';
 import { alignActions, arrangeActions, normalizeActions } from '../canvas/action-catalog';
 import { ScaleModal } from './dialogs';
 import type { App } from 'obsidian';

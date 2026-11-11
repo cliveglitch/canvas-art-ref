@@ -1,19 +1,7 @@
 import type { App, EventRef, Menu, TFile, TFolder, TextFileView } from 'obsidian';
+import type { CanvasData, NodeData } from './data';
 
-export interface Rect { x: number; y: number; width: number; height: number }
-export interface NodeData extends Rect {
-  id: string;
-  type: string;
-  file?: string;
-  text?: string;
-  label?: string;
-  [key: string]: unknown;
-}
-export interface CanvasData {
-  nodes: NodeData[];
-  edges: { id: string; [key: string]: unknown }[];
-  [key: string]: unknown;
-}
+// Undocumented runtime internals of Obsidian's Canvas and importer.
 export interface CanvasNode {
   id: string;
   canvas: NativeCanvas;
