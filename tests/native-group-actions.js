@@ -3,7 +3,7 @@
 nativeTest('group actions', async t => {
   const { check, wait } = t;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const integration = () => t.plugin()._children.find(child => child.actions);
+  const optimize = () => t.plugin().actions.run(canvas, t.plugin().actions.entries.find(entry => entry.id === 'optimize-groups'));
   const command = app.commands.commands['canvas-art-ref-plugin:optimize-groups'];
   // Each card matches its image's proportions, so Canvas never corrects a card's size while the images load.
   const svg = async (name, width, height) => (await t.create(name + '.svg', `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#6f9b9a"/></svg>`)).path;
@@ -51,7 +51,7 @@ nativeTest('group actions', async t => {
     check(canvas.history.current === history + 1, 'Optimization is exactly one native undo step');
     canvas.undo(); check(same(canvas.getData(), before), 'One undo restores the full canvas');
     canvas.redo(); check(same(canvas.getData(), after), 'One redo restores optimized group bounds');
-    integration().optimize();
+    await optimize();
     check(canvas.history.current === history + 1, 'Repeating optimization creates no extra undo step');
 
     await restore(['group', 'inner']);
@@ -78,7 +78,7 @@ nativeTest('group actions', async t => {
     check(same(canvas.getData(), emptyBefore) && canvas.history.current === emptyHistory, 'Empty groups remain unchanged without an undo step');
     select(['group']); canvas.setReadonly(true);
     check(!command.checkCallback(true), 'Read-only mode disables Optimize');
-    integration().optimize(); check(same(canvas.getData(), emptyBefore), 'Read-only mode prevents resizing');
+    await optimize(); check(same(canvas.getData(), emptyBefore), 'Read-only mode prevents resizing');
     canvas.setReadonly(false);
     select([]); check(!command.checkCallback(true), 'Empty selection disables Optimize');
   } finally { menu?.hide(); }

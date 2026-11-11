@@ -2,7 +2,7 @@
 // All 18 image actions, first/average normalization, native undo/redo, addition order and menus.
 nativeTest('image actions', async t => {
   const { check, wait } = t;
-  const actions = () => t.plugin()._children.find(child => child.actions).actions;
+  const actions = () => t.plugin().actions;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const near = (a, b) => Math.abs(a - b) < .00001;
   for (const folder of ['A', 'B']) await t.folder(folder);
@@ -41,12 +41,13 @@ nativeTest('image actions', async t => {
     ['stack', 'stack-images'], ['horizontal', 'distribute-images-horizontal'], ['vertical', 'distribute-images-vertical'],
     ['height', 'match-image-height'], ['width', 'match-image-width'], ['size', 'match-image-size'], ['area', 'match-image-area'], ['scale', 'normalize-image-scale'],
   ];
+  const run = action => actions().run(canvas, actions().entries.find(entry => entry.id === Object.fromEntries(definitions)[action]));
   await actions().setSource('average');
   for (const [action, command] of definitions) {
     await restore();
     const before = structuredClone(canvas.getData()), current = canvas.history.current;
     check(app.commands.commands['canvas-art-ref-plugin:' + command]?.checkCallback(true), action + ': native command available');
-    await actions().run(canvas, action);
+    await run(action);
     const after = structuredClone(canvas.getData());
     check(canvas.history.current === current + 1, action + ': exactly one undo step');
     check(same(after.edges, before.edges), action + ': connection retained');
@@ -64,7 +65,7 @@ nativeTest('image actions', async t => {
   for (const mode of ['height', 'width', 'size', 'area', 'scale']) {
     await restore(['context', 'b', 'c', 'a']);
     const reference = structuredClone(canvas.nodes.get('b').getData());
-    await actions().run(canvas, mode);
+    await run(mode);
     check(same(canvas.nodes.get('b').getData(), reference), mode + ': first selected image stays the reference');
     const measures = specs.map(([id, , sourceWidth]) => {
       const rect = canvas.nodes.get(id).getData();
@@ -75,14 +76,14 @@ nativeTest('image actions', async t => {
       : mode === 'scale' ? .6 * (1 / specs[index][2] + 1 / specs[0][2]) : 1.01)), mode + ': from-first target applied to all images');
   }
   await restore(['group']);
-  await actions().run(canvas, 'height');
+  await run('height');
   check(near(canvas.nodes.get('a').getData().height, 140), 'Group normalization uses the first image in reading order');
   check(same(canvas.nodes.get('context').getData(), baseline.nodes.find(node => node.id === 'context')), 'Selected group keeps its contextual note unchanged');
   await restore();
-  await actions().run(canvas, 'name');
+  await run('name');
   const visualOrder = () => ['a', 'b', 'c'].sort((a, b) => canvas.nodes.get(a).getData().y - canvas.nodes.get(b).getData().y || canvas.nodes.get(a).getData().x - canvas.nodes.get(b).getData().x);
   check(same(visualOrder(), ['c', 'b', 'a']), 'Name arrangement uses natural filename order');
-  await actions().run(canvas, 'name'); check(same(visualOrder(), ['a', 'b', 'c']), 'Repeating a sort reverses its order');
+  await run('name'); check(same(visualOrder(), ['a', 'b', 'c']), 'Repeating a sort reverses its order');
   const recorded = t.additionOrder(path);
   check(same(recorded.filter(id => selectedIds.includes(id)), ['a', 'b', 'c']), 'Addition order tracks native node insertion');
   await t.plugin().saveSettings();
@@ -93,7 +94,7 @@ nativeTest('image actions', async t => {
   check(t.sizeSource() === 'first', 'Normalization source survives plugin reload');
   await restore();
   canvas.nodes.get('a').updateZIndex();
-  await actions().run(canvas, 'addition');
+  await run('addition');
   check(same(visualOrder(), ['a', 'b', 'c']), 'Addition arrangement ignores changed native layer order');
   await app.plugins.disablePlugin('canvas-art-ref-plugin');
   check(canvas.addNode === nativeAdd, 'Unloading restores native node creation');

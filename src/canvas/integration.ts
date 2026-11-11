@@ -1,44 +1,29 @@
-import { Component, Notice, TFile, type Menu } from 'obsidian';
-import { activeCanvas, applyLayout, groupSelection, imageSelection } from './bridge';
+import { Component, TFile, type Command, type Menu } from 'obsidian';
+import { activeCanvas } from './bridge';
 import type { CanvasView, NativeCanvas } from './types';
-import type { NodeData } from './data';
-import { planLayout } from '../layout/plan';
-import { ImageActions } from './actions';
-import type { ImageAction } from './action-catalog';
-import { ImageOrdering } from './ordering';
+import type { ImageActions } from './image-actions';
+import type { ImageOrdering } from './ordering';
 import { StorageRouting } from '../storage/routing';
 import { ensureFolder, uniqueNotePath } from '../storage/folders';
 import { foldersFor } from '../settings';
 import { CanvasFoldersModal, type SettingsHost } from '../ui/settings';
-import { NoteModal, ScaleModal } from '../ui/dialogs';
-import { groupMenu, imageMenu } from '../ui/menus';
+import { NoteModal } from '../ui/dialogs';
+import { actionMenu } from '../ui/menus';
 
 export class CanvasIntegration extends Component {
-  readonly actions: ImageActions;
   private routing: StorageRouting;
-  private ordering: ImageOrdering;
   private attached = new WeakSet<NativeCanvas>();
   private enabled = true;
-  constructor(private host: SettingsHost) {
+  constructor(private host: SettingsHost, private actions: ImageActions, private ordering: ImageOrdering) {
     super();
-    this.ordering = this.addChild(new ImageOrdering(host));
-    this.actions = new ImageActions(host.app, () => host.settings, this.ordering, () => host.saveSettings());
     this.routing = this.addChild(new StorageRouting(host));
   }
 
   onload(): void {
     const workspace = this.host.app.workspace;
-    this.register(() => { this.enabled = false; this.actions.stop(); });
-    this.registerEvent(workspace.on('canvas:selection-menu', (menu, canvas) => {
-      imageMenu(menu, canvas, imageSelection(canvas), this.actions, this.host.app);
-      const groups = groupSelection(canvas);
-      groupMenu(menu, canvas, groups, () => this.optimize(canvas, groups));
-    }));
-    this.registerEvent(workspace.on('canvas:node-menu', (menu, node) => {
-      imageMenu(menu, node.canvas, imageSelection(node.canvas, node), this.actions, this.host.app);
-      const groups = groupSelection(node.canvas, node);
-      groupMenu(menu, node.canvas, groups, () => this.optimize(node.canvas, groups));
-    }));
+    this.register(() => { this.enabled = false; });
+    this.registerEvent(workspace.on('canvas:selection-menu', (menu, canvas) => actionMenu(menu, canvas, this.actions)));
+    this.registerEvent(workspace.on('canvas:node-menu', (menu, node) => actionMenu(menu, node.canvas, this.actions, node)));
     this.registerEvent(workspace.on('file-menu', (menu, file) => {
       if (file instanceof TFile && file.extension === 'canvas') menu.addItem(item => item.setTitle('Canvas folders…').setIcon('folder-cog').onClick(() => new CanvasFoldersModal(this.host, file.path).open()));
     }));
@@ -47,27 +32,28 @@ export class CanvasIntegration extends Component {
     workspace.onLayoutReady(() => { if (this.enabled) this.attachViews(); });
   }
 
-  run(action: ImageAction): void {
-    const canvas = activeCanvas(this.host.app);
-    if (canvas) void this.actions.run(canvas, action);
+  /** Canvas folders and Create Markdown note, available on any editable canvas. */
+  commands(): Command[] {
+    return ([
+      ['canvas-folders', 'Canvas folders', (canvas: NativeCanvas) => this.folders(canvas)],
+      ['create-note', 'Create Markdown note in canvas', (canvas: NativeCanvas) => this.note(canvas)],
+    ] as const).map(([id, name, callback]) => ({
+      id, name,
+      checkCallback: checking => {
+        const canvas = activeCanvas(this.host.app);
+        const available = !!canvas && !canvas.readonly;
+        if (available && !checking) callback(canvas);
+        return available;
+      },
+    }));
   }
-  optimize(canvas = activeCanvas(this.host.app), groups?: NodeData[]): void {
-    if (!this.enabled || !canvas) return;
-    try { applyLayout(canvas, planLayout({ data: canvas.getData(), selection: groups ?? groupSelection(canvas), operation: { kind: 'optimize-groups' } }).changes); }
-    catch (error) { new Notice(error instanceof Error ? error.message : 'Could not optimize the selected groups.'); }
+
+  private folders(canvas: NativeCanvas): void {
+    if (canvas.view.file) new CanvasFoldersModal(this.host, canvas.view.file.path).open();
   }
-  scale(): void {
-    const canvas = activeCanvas(this.host.app);
-    if (!canvas) return;
-    const images = imageSelection(canvas);
-    new ScaleModal(this.host.app, percent => this.actions.scale(canvas, percent, images)).open();
-  }
-  folders(): void {
-    const canvas = activeCanvas(this.host.app);
-    if (canvas?.view.file) new CanvasFoldersModal(this.host, canvas.view.file.path).open();
-  }
-  note(canvas = activeCanvas(this.host.app), position = canvas?.posCenter()): void {
-    if (!canvas || canvas.readonly || !position) return;
+
+  private note(canvas: NativeCanvas, position = canvas.posCenter()): void {
+    if (canvas.readonly || !position) return;
     const path = canvas.view.file?.path;
     new NoteModal(this.host.app, async name => {
       const setting = foldersFor(this.host.settings, path ?? '').notes;
@@ -94,7 +80,7 @@ export class CanvasIntegration extends Component {
         original.call(this, menu, ...args);
         if (!integration.enabled) return;
         menu.addItem(item => item.setTitle('Create Markdown note…').setIcon('file-plus').onClick(() => integration.note(this, args[0] as { x: number; y: number })));
-        menu.addItem(item => item.setTitle('Canvas folders…').setIcon('folder-cog').onClick(() => { if (this.view.file) new CanvasFoldersModal(integration.host, this.view.file.path).open(); }));
+        menu.addItem(item => item.setTitle('Canvas folders…').setIcon('folder-cog').onClick(() => integration.folders(this)));
       };
       canvas.showCreationMenu = wrapped;
       const target = new WeakRef(canvas);
