@@ -1,24 +1,11 @@
-/* global app -- Run with the Obsidian CLI to verify the actual native Canvas integration. */
-(async () => {
-  const root = 'Canvas Art Ref checks ' + Date.now();
-  const previous = window.canvasArtRefImageChecks;
-  const previousLeaf = previous?.previousLeaf ?? app.workspace.activeLeaf;
-  window.canvasArtRefImageTestRuns ??= [];
-  if (previous?.root && !window.canvasArtRefImageTestRuns.some(run => run.root === previous.root)) window.canvasArtRefImageTestRuns.push(previous);
-  window.canvasArtRefImageChecks = { root, previousLeaf, phase: 'setup' };
-  window.canvasArtRefImageCheckFailure = undefined;
-  const plugin = () => app.plugins.plugins['canvas-art-ref-plugin'];
-  const originalSource = previous?.originalSource ?? plugin().settings.normalizeSource;
-  window.canvasArtRefImageChecks.originalSource = originalSource;
-  const actions = () => plugin()._children.find(child => child.actions).actions;
-  const checks = [];
-  window.canvasArtRefImageChecks.checks = checks;
-  const check = (condition, label) => { if (!condition) throw new Error(label); checks.push(label); };
+/* global app, nativeTest -- Obsidian CLI supplies app; tests/native-harness.js supplies nativeTest. */
+// All 18 image actions, first/average normalization, native undo/redo, addition order and menus.
+nativeTest('image actions', async t => {
+  const { check, wait } = t;
+  const actions = () => t.plugin()._children.find(child => child.actions).actions;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const near = (a, b) => Math.abs(a - b) < .00001;
-  const wait = delay => new Promise(resolve => window.setTimeout(resolve, delay));
-  await app.vault.createFolder(root);
-  for (const folder of ['A', 'B']) await app.vault.createFolder(root + '/' + folder);
+  for (const folder of ['A', 'B']) await t.folder(folder);
   const specs = [
     ['a', 'B/zebra10', 400, 200, 300, 300, 180, 90],
     ['b', 'A/apple2', 100, 200, 50, 500, 100, 200],
@@ -26,19 +13,13 @@
   ];
   const nodes = [{ id: 'group', type: 'group', label: 'Image action checks', x: 0, y: 0, width: 1100, height: 900 }];
   for (const [id, name, width, height, x, y, displayWidth, displayHeight] of specs) {
-    const file = root + '/' + name + '.svg';
-    await app.vault.create(file, `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#6f9b9a"/></svg>`);
-    nodes.push({ id, type: 'file', file, x, y, width: displayWidth, height: displayHeight });
+    const file = await t.create(name + '.svg', `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#6f9b9a"/></svg>`);
+    nodes.push({ id, type: 'file', file: file.path, x, y, width: displayWidth, height: displayHeight });
   }
   nodes.push({ id: 'context', type: 'text', text: 'Keep this contextual note.', x: 800, y: 500, width: 180, height: 250, color: '3' });
   nodes.push({ id: 'outside', type: 'file', file: nodes[1].file, x: 1500, y: 50, width: 200, height: 100 });
-  const path = root + '/Checks.canvas';
-  const file = await app.vault.create(path, JSON.stringify({ nodes, edges: [{ id: 'edge', fromNode: 'a', toNode: 'context', label: 'Retain this connection' }] }));
-  const leaf = app.workspace.getLeaf('tab');
-  await leaf.openFile(file); app.workspace.setActiveLeaf(leaf, { focus: true });
-  await wait(100);
-  const canvas = leaf.view.canvas;
-  Object.assign(window.canvasArtRefImageChecks, { leaf, path });
+  const path = t.path('Checks.canvas');
+  const canvas = await t.open(await t.create('Checks.canvas', JSON.stringify({ nodes, edges: [{ id: 'edge', fromNode: 'a', toNode: 'context', label: 'Retain this connection' }] })));
   const baseline = structuredClone(canvas.getData());
   const selectedIds = ['c', 'a', 'b'];
   const select = ids => canvas.updateSelection(() => { canvas.selection.clear(); for (const id of ids) canvas.selection.add(canvas.nodes.get(id)); });
@@ -53,7 +34,6 @@
   ];
   await actions().setSource('average');
   for (const [action, command] of definitions) {
-    window.canvasArtRefImageChecks.phase = action;
     await restore();
     const before = structuredClone(canvas.getData()), current = canvas.history.current;
     check(app.commands.commands['canvas-art-ref-plugin:' + command]?.checkCallback(true), action + ': native command available');
@@ -75,8 +55,7 @@
     await restore(['context', 'b', 'c', 'a']);
     const reference = structuredClone(canvas.nodes.get('b').getData());
     await actions().run(canvas, mode);
-    const first = canvas.nodes.get('b').getData();
-    check(same(first, reference), mode + ': first selected image stays the reference');
+    check(same(canvas.nodes.get('b').getData(), reference), mode + ': first selected image stays the reference');
     const measures = specs.map(([id, , sourceWidth]) => {
       const rect = canvas.nodes.get(id).getData();
       return mode === 'size' ? Math.max(rect.width, rect.height) : mode === 'area' ? rect.width * rect.height : mode === 'scale' ? rect.width / sourceWidth : rect[mode];
@@ -94,14 +73,14 @@
   const visualOrder = () => ['a', 'b', 'c'].sort((a, b) => canvas.nodes.get(a).getData().y - canvas.nodes.get(b).getData().y || canvas.nodes.get(a).getData().x - canvas.nodes.get(b).getData().x);
   check(same(visualOrder(), ['c', 'b', 'a']), 'Name arrangement uses natural filename order');
   await actions().run(canvas, 'name'); check(same(visualOrder(), ['a', 'b', 'c']), 'Repeating a sort reverses its order');
-  const recorded = [...plugin().settings.imageOrder[path]];
+  const recorded = t.additionOrder(path);
   check(same(recorded.filter(id => selectedIds.includes(id)), ['a', 'b', 'c']), 'Addition order tracks native node insertion');
-  await plugin().saveSettings();
+  await t.plugin().saveSettings();
   await app.plugins.disablePlugin('canvas-art-ref-plugin');
   const nativeAdd = canvas.addNode;
   await app.plugins.enablePlugin('canvas-art-ref-plugin');
-  check(same(plugin().settings.imageOrder[path], recorded), 'Addition order survives plugin reload');
-  check(plugin().settings.normalizeSource === 'first', 'Normalization source survives plugin reload');
+  check(same(t.additionOrder(path), recorded), 'Addition order survives plugin reload');
+  check(t.sizeSource() === 'first', 'Normalization source survives plugin reload');
   await restore();
   canvas.nodes.get('a').updateZIndex();
   await actions().run(canvas, 'addition');
@@ -113,24 +92,21 @@
   canvas.nodes.get('group').attach(); canvas.nodes.get('group').render();
   let menu;
   const reference = app.workspace.on('canvas:node-menu', (value, node) => { if (node.id === 'group') menu = value; });
-  canvas.nodes.get('group').nodeEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 500, clientY: 250 }));
-  app.workspace.offref(reference);
-  const title = item => item.titleEl?.innerText || item.title;
-  const rootTitles = menu.items.map(title);
-  for (const [label, expected] of [['Arrange images', 6], ['Align images', 7], ['Normalize images', 8]]) {
-    const item = menu.items.find(item => title(item) === label);
-    check(rootTitles.filter(value => value === label).length === 1, label + ': appears once');
-    check(item.submenu.items.filter(item => title(item)).length === expected, label + ': contains all expected controls');
-  }
-  check(rootTitles.includes('Zoom to selection') && rootTitles.includes('Edit label') && rootTitles.includes('Remove'), 'All native group menu entries retained');
-  await wait(30); menu.hide();
+  try { canvas.nodes.get('group').nodeEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 500, clientY: 250 })); }
+  finally { app.workspace.offref(reference); }
+  try {
+    const title = item => item.titleEl?.innerText || item.title;
+    const rootTitles = menu.items.map(title);
+    for (const [label, expected] of [['Arrange images', 6], ['Align images', 7], ['Normalize images', 8]]) {
+      const item = menu.items.find(item => title(item) === label);
+      check(rootTitles.filter(value => value === label).length === 1, label + ': appears once');
+      check(item.submenu.items.filter(item => title(item)).length === expected, label + ': contains all expected controls');
+    }
+    check(rootTitles.includes('Zoom to selection') && rootTitles.includes('Edit label') && rootTitles.includes('Remove'), 'All native group menu entries retained');
+    await wait(30);
+  } finally { menu?.hide(); }
   canvas.setReadonly(true);
   check(definitions.every(([, id]) => !app.commands.commands['canvas-art-ref-plugin:' + id].checkCallback(true)), 'Read-only mode disables all 18 image commands');
   canvas.setReadonly(false); select([]);
   check(definitions.every(([, id]) => !app.commands.commands['canvas-art-ref-plugin:' + id].checkCallback(true)), 'All image commands remain selection-based');
-  await actions().setSource(originalSource);
-  const report = { actions: definitions.length, checks: checks.length, passed: checks, folder: root };
-  window.canvasArtRefImageChecks = { root, path, leaf, previousLeaf, report };
-  await app.vault.adapter.write(plugin().manifest.dir + '/output/image-action-checks.json', JSON.stringify(report, null, 2));
-  return JSON.stringify({ actions: definitions.length, passed: checks.length, folder: root });
-})().catch(error => { window.canvasArtRefImageCheckFailure = error.message; throw error; })
+});
