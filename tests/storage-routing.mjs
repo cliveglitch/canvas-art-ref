@@ -1,33 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { setTimeout as wait } from 'node:timers/promises';
-import { build } from 'esbuild';
+import { api } from './bundle.mjs';
 
-const bundle = await build({
-  stdin: { contents: `export { StorageRouting } from './src/storage/routing'; export { defaults } from './src/settings'; export { TFolder } from 'obsidian';`, resolveDir: process.cwd() },
-  bundle: true, platform: 'node', format: 'esm', write: false,
-  plugins: [{
-    name: 'obsidian-test-api',
-    setup(build) {
-      build.onResolve({ filter: /^obsidian$/ }, () => ({ path: 'obsidian', namespace: 'test' }));
-      build.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: `
-        export class Component {
-          cleanups = [];
-          register(cleanup) { this.cleanups.push(cleanup); }
-          registerDomEvent(target, type, listener) {
-            target.addEventListener(type, listener);
-            this.register(() => target.removeEventListener(type, listener));
-          }
-          load() { this.onload(); }
-          unload() { for (const cleanup of this.cleanups) cleanup(); }
-        }
-        export class TFolder { constructor(path) { this.path = path; } }
-        export class Notice { constructor(message) { throw new Error(message); } }
-      ` }));
-    },
-  }],
-});
-const { StorageRouting, defaults, TFolder } = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const { StorageRouting, defaults, obsidian: { TFolder } } = api;
 const image = { name: 'Pasted image', extension: 'png' };
 const nextTask = () => wait(0);
 

@@ -1,12 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { build } from 'esbuild';
-
-const bundle = await build({
-  stdin: { contents: `export * from './src/canvas/selection'; export * from './src/canvas/bridge'; export * from './src/layout/packing'; export * from './src/layout/sizing'; export * from './src/layout/alignment'; export * from './src/layout/ordering'; export * from './src/layout/groups'; export * from './src/settings';`, resolveDir: process.cwd() },
-  bundle: true, platform: 'node', format: 'esm', write: false,
-});
-const api = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+import { api } from './bundle.mjs';
 const image = (id, x = 0, y = 0, width = 100, height = 100) => ({ id, x, y, width, height, type: 'file', file: id + '.png' });
 
 test('selection includes contained group images, excluding notes, edges and partly overlapping images', () => {
