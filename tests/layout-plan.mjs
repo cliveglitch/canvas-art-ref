@@ -39,6 +39,20 @@ test('optimal packing responds to a wide or tall viewport', () => {
   assert.ok(wide.width / wide.height > tall.width / tall.height);
 });
 
+test('a wider viewport never gives a narrower optimal collage', () => {
+  let seed = 7;
+  const random = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+  for (const count of [6, 17, 35, 80]) {
+    const input = Array.from({ length: count }, (_, index) => image(String(index), index * 50, 0, 120 + random() * 400, 120 + random() * 400));
+    let previous = 0;
+    for (let aspect = .5; aspect <= 3; aspect += .05) {
+      const box = api.bounds([...plan(input, { kind: 'pack' }, { gap: 24, aspect }).changes.values()]);
+      assert.ok(box.width / box.height >= previous - 1e-9, `${count} images: viewport ${aspect.toFixed(2)} gave a narrower collage`);
+      previous = box.width / box.height;
+    }
+  }
+});
+
 test('packing and sorted arrangements of a very large selection stay fast and never overlap', () => {
   let seed = 1;
   const random = () => (seed = seed * 16807 % 2147483647) / 2147483647;

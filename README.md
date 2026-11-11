@@ -4,7 +4,7 @@ A small extension to Obsidian's native Canvas for drawing and painting reference
 
 Select image cards, or a group containing images, then right-click:
 
-- **Arrange images** offers **Optimal**, **By name**, **By path**, **By order**, **By addition**, and **Randomly**. Optimal packs images into a collage shaped for the current viewport. Sorted arrangements use rows; repeating a sort on the same images reverses its order. Packing avoids other cards.
+- **Arrange images** offers **Optimal**, **By name**, **By path**, **By order**, **By addition**, and **Randomly**. Optimal packs images into the collage that shows them largest when zoomed to fit the current viewport, so a wider window never gives a narrower collage. Sorted arrangements use rows; repeating a sort on the same images reverses its order. Packing avoids other cards.
 - **Align images** offers **Left**, **Right**, **Top**, **Bottom**, **Stack**, **Distribute horizontal**, and **Distribute vertical**. Edge alignment matches the chosen edges. Stack centers images in a pile while retaining their native layer order. Distribution forms a row or column with the configured spacing.
 - **Normalize images** offers **Height**, **Width**, **Size**, **Area**, and **Scale**. Choose **From first** or **Average** at the top of the submenu; the choice is remembered. Size matches the longest side. Area matches displayed area. Scale matches displayed size as a fraction of each image's source resolution. All preserve image proportions, subject to Canvas's pixel rounding.
 - **Normalize images → Scale selection…** scales the whole arrangement by a percentage, including spacing.
@@ -21,7 +21,7 @@ Right-click a group and choose **Optimize group** to fit its boundary around all
 
 The image actions follow [PureRef](https://www.pureref.com/handbook/images/organize/) and approximate it where its handbook is silent or Canvas works differently:
 
-- **Optimal** packs for the viewport's aspect ratio, standing in for fitting the current window.
+- **Optimal** packs for the canvas viewport's shape when you run it, standing in for fitting the current window.
 - **By order** uses selection order, the Canvas stand-in for PureRef's hierarchy order.
 - **By addition** keeps its order in this plugin's data rather than in the `.canvas` file, so canvases stay native. A canvas restored from the trash gets its order back.
 - Canvas groups contain whatever lies fully inside their bounds, so a group that grows to fit its images can take in a nearby card.
