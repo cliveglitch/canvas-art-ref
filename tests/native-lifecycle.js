@@ -15,7 +15,7 @@
   await app.plugins.disablePlugin('canvas-art-ref-plugin');
   check(app.importAttachments === nativeImport && app.fileManager.getNewFileParent === nativeParent && canvas.showCreationMenu === nativeCreation, 'Unloading restores native import, note-folder and menu methods');
   await app.plugins.enablePlugin('canvas-art-ref-plugin');
-  check(Object.keys(app.commands.commands).filter(id => id.startsWith('canvas-art-ref-plugin:')).length === 21, 'Reloading registers each command once');
+  check(Object.keys(app.commands.commands).filter(id => id.startsWith('canvas-art-ref-plugin:')).length === 22, 'Reloading registers each command once');
   canvas.selectOnly(canvas.nodes.get('demo-group'));
   const reference = app.workspace.on('canvas:node-menu', (menu, node) => {
     if (node.id === 'demo-group') { state.menu = menu; app.workspace.offref(reference); }
