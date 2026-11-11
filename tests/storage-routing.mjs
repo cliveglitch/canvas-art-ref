@@ -1,110 +1,84 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { setTimeout as wait } from 'node:timers/promises';
 import { api } from './bundle.mjs';
-import { pluginData } from './fakes.mjs';
+import { memoryCanvas, pluginData } from './fakes.mjs';
 
-const { StorageRouting, obsidian: { TFolder } } = api;
+const { StorageRouting, obsidian: { TFolder, TFile, notices } } = api;
 const image = { name: 'Pasted image', extension: 'png' };
-const nextTask = () => wait(0);
 
-async function fixture(t) {
-  const win = new EventTarget();
-  win.setTimeout = setTimeout;
-  const wrapperEl = { ownerDocument: { defaultView: win } };
-  const canvas = { wrapperEl, readonly: false, view: { file: { path: 'Board.canvas' } } };
-  const folders = new Map(['', 'assets', 'other'].map(path => [path, new TFolder(path)]));
-  const calls = [];
-  const original = async (items, folder) => {
-    calls.push({ items, folder });
-    return items.map(item => ({ path: (folder?.path ? folder.path + '/' : '') + item.name + '.' + item.extension }));
-  };
+/** Storage routing over the in-memory canvas and a vault of folders. `native` records what Canvas would import. */
+async function fixture(stored = { canvases: { 'Board.canvas': { images: 'assets', notes: 'notes' } } }) {
+  const canvas = memoryCanvas();
+  const { data } = await pluginData(stored);
+  const entries = new Map(['', 'assets', 'other', 'notes'].map(path => [path, new TFolder(path)]));
   const app = {
     vault: {
-      getRoot: () => folders.get(''),
-      getAbstractFileByPath: path => folders.get(path),
-      createFolder: async path => { folders.set(path, new TFolder(path)); },
+      getRoot: () => entries.get(''),
+      getAbstractFileByPath: path => entries.get(path),
+      createFolder: async path => { entries.set(path, new TFolder(path)); },
     },
-    workspace: { getLeavesOfType: () => [{ view: { canvas } }] },
-    fileManager: { getNewFileParent: () => folders.get('') },
-    importAttachments: original,
   };
-  const { data } = await pluginData({ canvases: { 'Board.canvas': { images: 'assets' } } });
-  const routing = new StorageRouting(app, data);
-  routing.load(); routing.attach(canvas);
-  t.after(() => routing.unload());
-  const dispatch = (type = 'paste', target = null) => {
-    const event = new Event(type);
-    Object.defineProperties(event, { composedPath: { value: () => [wrapperEl, win] }, target: { value: target } });
-    win.dispatchEvent(event);
+  new StorageRouting(app, data, canvas);
+  const calls = [];
+  const native = async (items, folder) => {
+    calls.push({ items, folder: folder?.path ?? null });
+    return items.map(item => ({ path: (folder?.path ? folder.path + '/' : '') + item.name + '.' + item.extension }));
   };
-  return { app, data, canvas, folders, calls, dispatch, routing, original };
+  const board = canvas.board([]);
+  const paths = async (items, folder = null) => (await canvas.import(board, items, folder, native))?.map(file => file.path);
+  return { canvas, data, entries, board, calls, paths, native };
 }
 
-test('pasted images retain the configured folder across native event listener microtasks', async t => {
-  const { app, dispatch, calls } = await fixture(t);
-  dispatch();
-  // Real browser events run microtasks between capture and native paste listeners.
-  await Promise.resolve();
-  const files = await app.importAttachments([image], null);
-  assert.equal(files[0].path, 'assets/Pasted image.png');
-  assert.equal(calls[0].folder.path, 'assets');
-  await nextTask();
-  assert.equal((await app.importAttachments([image], null))[0].path, 'Pasted image.png');
+test('images pasted or dropped on a canvas go to its images folder', async () => {
+  const { paths, calls } = await fixture();
+  assert.deepEqual(await paths([image]), ['assets/Pasted image.png']);
+  assert.deepEqual(calls.map(call => call.folder), ['assets']);
 });
 
-test('a later canvas event keeps its folder after the previous event scope expires', async t => {
-  const { app, canvas, data, dispatch } = await fixture(t);
-  dispatch();
-  const previousExpiry = nextTask();
-  canvas.view.file.path = 'Other.canvas';
-  data.setCanvasFolders('Other.canvas', { images: 'other' });
-  dispatch();
-  await previousExpiry;
-  assert.equal((await app.importAttachments([image], null))[0].path, 'other/Pasted image.png');
-});
-
-test('mixed drops route only images and capture their destination before awaiting', async t => {
-  const { app, data, dispatch, calls } = await fixture(t);
-  dispatch('drop');
-  await Promise.resolve();
+test('mixed imports route only the images, with the destination captured before awaiting', async () => {
+  const { data, paths, calls } = await fixture();
   const note = { name: 'Notes', extension: 'md' };
-  const pending = app.importAttachments([image, note], null);
+  const pending = paths([image, note]);
   data.setCanvasFolders('Board.canvas', { images: 'other' });
-  assert.deepEqual((await pending).map(file => file.path), ['assets/Pasted image.png', 'Notes.md']);
-  assert.deepEqual(calls.map(call => call.folder?.path ?? null), ['assets', null]);
+  assert.deepEqual(await pending, ['assets/Pasted image.png', 'Notes.md']);
+  assert.deepEqual(calls.map(call => call.folder), ['assets', null]);
 });
 
-test('folder defaults, explicit vault root and missing nested folders are honored', async t => {
-  const { app, data, dispatch } = await fixture(t);
-  data.setDefaults({ images: 'assets', notes: '' }, 24); data.setCanvasFolders('Board.canvas', {});
-  dispatch();
-  assert.equal((await app.importAttachments([image], null))[0].path, 'assets/Pasted image.png');
+test('defaults, the vault root and missing nested folders are honoured', async () => {
+  const { data, paths, entries } = await fixture({ images: 'assets' });
+  assert.deepEqual(await paths([image]), ['assets/Pasted image.png']);
   data.setCanvasFolders('Board.canvas', { images: '/' });
-  dispatch();
-  assert.equal((await app.importAttachments([image], null))[0].path, 'Pasted image.png');
+  assert.deepEqual(await paths([image]), ['Pasted image.png']);
   data.setCanvasFolders('Board.canvas', { images: 'new/nested' });
-  dispatch();
-  assert.equal((await app.importAttachments([image], null))[0].path, 'new/nested/Pasted image.png');
+  assert.deepEqual(await paths([image]), ['new/nested/Pasted image.png']);
+  assert.ok(entries.get('new') instanceof TFolder);
 });
 
-test('explicit native destinations, read-only canvases and text editors retain native handling', async t => {
-  const { app, canvas, dispatch, folders } = await fixture(t);
-  dispatch();
-  assert.equal((await app.importAttachments([image], folders.get('other')))[0].path, 'other/Pasted image.png');
-  await nextTask();
-  canvas.readonly = true; dispatch();
-  assert.equal((await app.importAttachments([image], null))[0].path, 'Pasted image.png');
-  canvas.readonly = false;
-  dispatch('paste', { nodeType: 1, closest: () => ({}) });
-  assert.equal((await app.importAttachments([image], null))[0].path, 'Pasted image.png');
+test('explicit destinations, read-only canvases, unsaved canvases, other files and canvases without an images folder import natively', async () => {
+  const { canvas, entries, board, paths, native } = await fixture();
+  assert.equal(await paths([image], entries.get('other')), undefined);
+  assert.equal(await paths([{ name: 'Notes', extension: 'md' }, { name: 'Folder', extension: 'png', isDirectory: true }]), undefined);
+  board.readonly = true;
+  assert.equal(await paths([image]), undefined);
+  const elsewhere = canvas.board([], { path: 'Other.canvas' });
+  assert.equal(canvas.import(elsewhere, [image], null, native), undefined);
+  const unsaved = canvas.board([], { path: '' });
+  assert.equal(canvas.import(unsaved, [image], null, native), undefined);
 });
 
-test('unloading during a paste restores native imports', async t => {
-  const { app, dispatch, routing, original } = await fixture(t);
-  dispatch(); await Promise.resolve();
-  const wrapped = app.importAttachments;
-  routing.unload();
-  assert.equal(app.importAttachments, original);
-  assert.equal((await wrapped.call(app, [image], null))[0].path, 'Pasted image.png');
+test('an import that cannot reach its folder shows a notice and imports nothing', async () => {
+  const { entries, paths } = await fixture();
+  entries.set('assets', new TFile('assets'));
+  assert.deepEqual(await paths([image]), []);
+  assert.equal(notices.at(-1), 'A file already uses the folder path: assets');
+});
+
+test('new notes from a canvas go to its notes folder only when that folder exists', async () => {
+  const { canvas, data, entries } = await fixture();
+  assert.equal(canvas.notesFolder('Board.canvas'), entries.get('notes'));
+  assert.equal(canvas.notesFolder('Other.canvas'), undefined);
+  data.setCanvasFolders('Board.canvas', { notes: '/' });
+  assert.equal(canvas.notesFolder('Board.canvas'), entries.get(''));
+  data.setCanvasFolders('Board.canvas', { notes: 'missing' });
+  assert.equal(canvas.notesFolder('Board.canvas'), undefined);
 });

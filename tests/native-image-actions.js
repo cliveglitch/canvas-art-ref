@@ -41,7 +41,8 @@ nativeTest('image actions', async t => {
     ['stack', 'stack-images'], ['horizontal', 'distribute-images-horizontal'], ['vertical', 'distribute-images-vertical'],
     ['height', 'match-image-height'], ['width', 'match-image-width'], ['size', 'match-image-size'], ['area', 'match-image-area'], ['scale', 'normalize-image-scale'],
   ];
-  const run = action => actions().run(canvas, actions().entries.find(entry => entry.id === Object.fromEntries(definitions)[action]));
+  // The test canvas is the active one.
+  const run = action => actions().run(t.plugin().canvas.active(), actions().entries.find(entry => entry.id === Object.fromEntries(definitions)[action]));
   await actions().setSource('average');
   for (const [action, command] of definitions) {
     await restore();

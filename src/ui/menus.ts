@@ -1,33 +1,30 @@
 import type { Menu } from 'obsidian';
-import type { CanvasNode, NativeCanvas } from '../canvas/types';
+import { submenu, type Board } from '../canvas/adapter';
 import { optimizeGroups, sections, type ImageActions } from '../canvas/image-actions';
 
-// setSubmenu exists in the native Menu API but is not in the published typings.
-interface SubmenuItem { setSubmenu(): Menu }
-
 /** Add the image action submenus and Optimize group to a canvas context menu, acting on the cards selected as it opens. */
-export function actionMenu(menu: Menu, canvas: NativeCanvas, actions: ImageActions, clicked?: CanvasNode): void {
-  if (actions.available(canvas, 'images', clicked)) {
-    const selection = actions.targets(canvas, 'images', clicked);
+export function actionMenu(menu: Menu, board: Board, actions: ImageActions, clicked?: string): void {
+  if (actions.available(board, 'images', clicked)) {
+    const selection = actions.targets(board, 'images', clicked);
     for (const section of sections) {
       menu.addItem(item => {
         item.setTitle(section.title).setIcon(section.icon);
-        const submenu = (item as typeof item & SubmenuItem).setSubmenu();
+        const entries = submenu(item);
         if (section.id === 'normalize') {
-          submenu.addItem(entry => entry.setTitle('From first').setChecked(actions.source === 'first').onClick(() => actions.setSource('first')));
-          submenu.addItem(entry => entry.setTitle('Average').setChecked(actions.source === 'average').onClick(() => actions.setSource('average')));
-          submenu.addSeparator();
+          entries.addItem(entry => entry.setTitle('From first').setChecked(actions.source === 'first').onClick(() => actions.setSource('first')));
+          entries.addItem(entry => entry.setTitle('Average').setChecked(actions.source === 'average').onClick(() => actions.setSource('average')));
+          entries.addSeparator();
         }
         for (const entry of section.entries) {
           // Scale selection is a separate transform after the normalizations.
-          if (entry.operation === 'ask-percent') submenu.addSeparator();
-          submenu.addItem(item => item.setTitle(entry.title).onClick(() => actions.run(canvas, entry, selection)));
+          if (entry.operation === 'ask-percent') entries.addSeparator();
+          entries.addItem(item => item.setTitle(entry.title).onClick(() => actions.run(board, entry, selection)));
         }
       });
     }
   }
-  if (actions.available(canvas, 'groups', clicked)) {
-    const groups = actions.targets(canvas, 'groups', clicked);
-    menu.addItem(item => item.setTitle(groups.length === 1 ? 'Optimize group' : 'Optimize groups').setIcon('minimize').onClick(() => actions.run(canvas, optimizeGroups, groups)));
+  if (actions.available(board, 'groups', clicked)) {
+    const groups = actions.targets(board, 'groups', clicked);
+    menu.addItem(item => item.setTitle(groups.length === 1 ? 'Optimize group' : 'Optimize groups').setIcon('minimize').onClick(() => actions.run(board, optimizeGroups, groups)));
   }
 }
