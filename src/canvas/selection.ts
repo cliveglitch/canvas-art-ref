@@ -23,6 +23,11 @@ export function selectedImages(nodes: NodeData[], selected: ReadonlySet<string>)
 
 export function bounds(rects: Rect[]): Rect {
   if (!rects.length) throw new Error('Select at least one image.');
-  const x = Math.min(...rects.map(rect => rect.x)), y = Math.min(...rects.map(rect => rect.y));
-  return { x, y, width: Math.max(...rects.map(rect => rect.x + rect.width)) - x, height: Math.max(...rects.map(rect => rect.y + rect.height)) - y };
+  // A loop rather than Math.min(...spread), which overflows the call stack on very large selections.
+  let x = Infinity, y = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const rect of rects) {
+    x = Math.min(x, rect.x); y = Math.min(y, rect.y);
+    right = Math.max(right, rect.x + rect.width); bottom = Math.max(bottom, rect.y + rect.height);
+  }
+  return { x, y, width: right - x, height: bottom - y };
 }

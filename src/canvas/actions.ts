@@ -10,6 +10,8 @@ import type { ImageOrdering } from './ordering';
 
 export class ImageActions {
   private enabled = true;
+  // Natural image sizes, reused until the file changes so repeated actions on large selections skip reloading.
+  private sizes = new Map<string, { stamp: string; width: number; height: number }>();
   constructor(private app: App, private settings: () => Settings, private ordering: ImageOrdering, private save: () => Promise<void>) {}
   stop(): void { this.enabled = false; }
   get source(): SizeSource { return this.settings().normalizeSource; }
@@ -52,23 +54,43 @@ export class ImageActions {
   }
 
   private async dimensions(selected: NodeData[]): Promise<ImageRect[]> {
-    const dimensions = new Map<string, { width: number; height: number }>();
-    const paths = [...new Set(selected.map(node => node.file!))];
-    for (let start = 0; start < paths.length; start += 8) {
-      await Promise.all(paths.slice(start, start + 8).map(async path => {
-        const file = this.app.vault.getAbstractFileByPath(path);
-        if (!(file instanceof TFile)) throw new Error('An image is missing: ' + path);
-        const image = new Image();
-        image.src = this.app.vault.getResourcePath(file);
-        await image.decode();
-        if (!image.naturalWidth || !image.naturalHeight) throw new Error('Could not read image dimensions: ' + path);
-        dimensions.set(path, { width: image.naturalWidth, height: image.naturalHeight });
+    const files = [...new Set(selected.map(node => node.file!))].map(path => {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFile)) throw new Error('An image is missing: ' + path);
+      return file;
+    });
+    const stamp = (file: TFile): string => file.stat.mtime + ':' + file.stat.size;
+    const pending = files.filter(file => this.sizes.get(file.path)?.stamp !== stamp(file));
+    const progress = pending.length > 50 ? new Notice(`Reading image sizes… 0/${pending.length}`, 0) : undefined;
+    let next = 0, done = 0;
+    try {
+      // Keep a fixed number of loads in flight, starting the next as soon as one finishes.
+      await Promise.all(Array.from({ length: Math.min(16, pending.length) }, async () => {
+        while (next < pending.length) {
+          const file = pending[next++]!;
+          try { this.sizes.set(file.path, { stamp: stamp(file), ...await this.naturalSize(file) }); }
+          catch (error) { next = pending.length; throw error; }
+          progress?.setMessage(`Reading image sizes… ${++done}/${pending.length}`);
+        }
       }));
-    }
+    } finally { progress?.hide(); }
     return selected.map(node => {
-      const source = dimensions.get(node.file!)!;
+      const source = this.sizes.get(node.file!)!;
       return fitted(node, source.width / source.height, source);
     });
+  }
+
+  private async naturalSize(file: TFile): Promise<{ width: number; height: number }> {
+    // Wait for load, not decode(): the size is known once the image loads, and Chromium can reject
+    // full decodes of large images under memory pressure even when the file is valid.
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('Could not load image: ' + file.path));
+      image.src = this.app.vault.getResourcePath(file);
+    });
+    if (!image.naturalWidth || !image.naturalHeight) throw new Error('Could not read image dimensions: ' + file.path);
+    return { width: image.naturalWidth, height: image.naturalHeight };
   }
 
   private report(error: unknown): void {

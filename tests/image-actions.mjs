@@ -59,6 +59,26 @@ export function checkImageActions(api, image) {
     assert.ok(wide.width / wide.height > tall.width / tall.height);
   });
 
+  test('packing a very large mixed selection stays fast and never overlaps', () => {
+    let seed = 1;
+    const random = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+    const input = Array.from({ length: 1500 }, (_, index) => image(String(index), index % 40 * 400, Math.floor(index / 40) * 600, 80 + random() * 600, 200 + random() * 500));
+    const obstacle = { x: 2000, y: 2000, width: 800, height: 800 };
+    for (const arrange of [() => api.pack(input, 24, [obstacle], 1.8), () => api.orderedPack(input, 24, [obstacle])]) {
+      const started = performance.now();
+      const rects = [...arrange().values()];
+      // Generous bound: the previous packing took minutes at this size.
+      assert.ok(performance.now() - started < 10000, 'packing 1500 images took too long');
+      assert.equal(rects.length, input.length);
+      for (let a = 0; a < rects.length; a++) {
+        assert.equal(api.overlaps(rects[a], obstacle, 24), false);
+        for (let b = a + 1; b < rects.length; b++) if (api.overlaps(rects[a], rects[b], 24)) assert.fail(`images ${a} and ${b} overlap`);
+      }
+    }
+    // More rectangles than a Math.min(...spread) call can take.
+    assert.equal(api.bounds(Array.from({ length: 200000 }, (_, x) => ({ x, y: 0, width: 1, height: 1 }))).width, 200000);
+  });
+
   for (const mode of ['left', 'right', 'top', 'bottom']) test(`align ${mode} matches edges while retaining the other axis and image dimensions`, () => {
     const aligned = api.alignImages(nodes, mode, 24), box = api.bounds(nodes);
     for (const original of nodes) {
