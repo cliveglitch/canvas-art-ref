@@ -1,26 +1,29 @@
 import { Plugin } from 'obsidian';
-import { loadSettings, renameCanvasSettings, type Settings } from './settings';
-import { registerCommands } from './canvas/commands';
+import { PluginData } from './plugin-data';
+import { ObsidianCanvas } from './canvas/adapter';
+import { AdditionOrder } from './canvas/addition-order';
+import { ImageActions } from './canvas/image-actions';
 import { CanvasIntegration } from './canvas/integration';
+import { StorageRouting } from './storage/routing';
 import { CanvasArtRefSettingsTab } from './ui/settings';
 
 export default class CanvasArtRefPlugin extends Plugin {
-  settings!: Settings;
-  private saves = Promise.resolve();
+  pluginData!: PluginData;
+  canvas!: ObsidianCanvas;
+  actions!: ImageActions;
 
   async onload(): Promise<void> {
-    this.settings = loadSettings(await this.loadData() as unknown);
-    const integration = this.addChild(new CanvasIntegration(this));
-    this.addSettingTab(new CanvasArtRefSettingsTab(this));
-    registerCommands(this, integration);
-    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
-      if (renameCanvasSettings(this.settings, oldPath, file.path)) void this.saveSettings();
-    }));
-  }
-
-  saveSettings(): Promise<void> {
-    const snapshot = structuredClone(this.settings);
-    this.saves = this.saves.catch(() => {}).then(() => this.saveData(snapshot));
-    return this.saves;
+    this.pluginData = this.addChild(new PluginData({ load: () => this.loadData(), save: data => this.saveData(data) }, this.app.vault));
+    await this.pluginData.read();
+    // Everything that listens to Canvas subscribes before the adapter loads and finds the open canvases.
+    const canvas = this.canvas = new ObsidianCanvas(this.app);
+    const additions = new AdditionOrder(this.pluginData, canvas);
+    this.actions = new ImageActions(this.app, this.pluginData, additions, canvas);
+    this.register(() => this.actions.stop());
+    new StorageRouting(this.app, this.pluginData, canvas);
+    const integration = this.addChild(new CanvasIntegration(this.app, this.pluginData, this.actions, canvas));
+    this.addChild(canvas);
+    this.addSettingTab(new CanvasArtRefSettingsTab(this, this.pluginData));
+    for (const command of [...this.actions.commands(), ...integration.commands()]) this.addCommand(command);
   }
 }

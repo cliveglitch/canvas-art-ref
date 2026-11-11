@@ -1,8 +1,8 @@
-import type { NodeData } from '../canvas/types';
+import type { NodeData } from '../canvas/data';
 
 export type OrderMode = 'name' | 'path' | 'order' | 'addition' | 'random';
 
-export function orderImages<T extends NodeData>(images: T[], mode: OrderMode, additions: string[] = [], random: () => number = Math.random): T[] {
+export function orderImages<T extends NodeData>(images: T[], mode: OrderMode, additions: readonly string[] = [], random: () => number = Math.random): T[] {
   const result = [...images];
   if (mode === 'name' || mode === 'path') {
     const value = (node: T): string => mode === 'path' ? node.file ?? '' : node.file?.split('/').pop() ?? '';
@@ -21,20 +21,16 @@ export function orderImages<T extends NodeData>(images: T[], mode: OrderMode, ad
   return result;
 }
 
-export class SortHistory {
-  private previous?: { signature: string; mode: OrderMode; base: string[]; reversed: boolean };
+/** What reverse on repeat remembers about the last sort applied to a canvas. */
+export interface SortMemory { signature: string; mode: OrderMode; base: string[]; reversed: boolean }
 
-  prepare<T extends NodeData>(images: T[], mode: OrderMode, additions: string[]): { images: T[]; accept: () => void } {
-    const signature = JSON.stringify(images.map(node => [node.id, node.file]).sort((a, b) => a[0]!.localeCompare(b[0]!)));
-    const previous = this.previous;
-    const repeated = mode !== 'random' && previous?.signature === signature && previous.mode === mode;
-    const base = repeated ? previous.base : orderImages(images, mode, additions).map(node => node.id);
-    const reversed = repeated ? !previous.reversed : false;
-    const ids = reversed ? [...base].reverse() : base;
-    const byId = new Map(images.map(image => [image.id, image]));
-    return {
-      images: ids.map(id => byId.get(id)!),
-      accept: () => { this.previous = mode === 'random' ? undefined : { signature, mode, base, reversed }; },
-    };
-  }
+/** Order images for a sorted arrangement; repeating the remembered sort on the same images reverses it. */
+export function sortImages<T extends NodeData>(images: T[], mode: OrderMode, additions: readonly string[], memory?: SortMemory, random?: () => number): { images: T[]; memory?: SortMemory } {
+  const signature = JSON.stringify(images.map(node => [node.id, node.file]).sort((a, b) => a[0]!.localeCompare(b[0]!)));
+  const repeated = mode !== 'random' && memory?.signature === signature && memory.mode === mode;
+  const base = repeated ? memory.base : orderImages(images, mode, additions, random).map(node => node.id);
+  const reversed = repeated ? !memory.reversed : false;
+  const ids = reversed ? [...base].reverse() : base;
+  const byId = new Map(images.map(image => [image.id, image]));
+  return { images: ids.map(id => byId.get(id)!), memory: mode === 'random' ? undefined : { signature, mode, base, reversed } };
 }

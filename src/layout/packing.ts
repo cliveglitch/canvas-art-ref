@@ -1,5 +1,4 @@
-import type { NodeData, Rect } from '../canvas/types';
-import { bounds } from '../canvas/selection';
+import { bounds, type NodeData, type Rect } from '../canvas/data';
 
 /** Placed rectangles bucketed into grid cells, so checking a position only scans its neighbourhood. */
 class Grid {
@@ -53,8 +52,10 @@ class Grid {
   private row(y: number): number { return Math.floor(y / this.height); }
 }
 
-function arrange(images: NodeData[], origin: Rect, width: number, gap: number, obstacles: Rect[], ordered: boolean): Map<string, Rect> {
+/** Place images within `width`. Returns undefined as soon as `abandon` rejects the bounds placed so far, which only grow. */
+function arrange(images: NodeData[], origin: Rect, width: number, gap: number, obstacles: Rect[], ordered: boolean, abandon?: (placed: Rect) => boolean): Map<string, Rect> | undefined {
   const result = new Map<string, Rect>();
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
   const grid = new Grid(images, gap, { ...origin, width: width + 0.01 });
   for (const obstacle of obstacles) grid.add(obstacle);
   // Candidate columns: the left edge, and just right of every placed rectangle. Each keeps the highest
@@ -79,31 +80,44 @@ function arrange(images: NodeData[], origin: Rect, width: number, gap: number, o
     }
     if (!best) throw new Error('Could not fit the selected images.');
     grid.add(best); result.set(image.id, best);
+    left = Math.min(left, best.x); top = Math.min(top, best.y); right = Math.max(right, best.x + best.width); bottom = Math.max(bottom, best.y + best.height);
+    if (abandon?.({ x: left, y: top, width: right - left, height: bottom - top })) return undefined;
     if (!columns.has(best.x + best.width + gap)) columns.set(best.x + best.width + gap, origin.y);
     if (ordered) { cursorX = best.x + best.width + gap; cursorY = best.y; rowBottom = Math.max(rowBottom, best.y + best.height); }
   }
   return result;
 }
 
-/** Deterministic packing: no rotation, cropping, or source-file changes. */
+/**
+ * Deterministic packing for a viewport's aspect ratio: no rotation, cropping, or source-file changes.
+ * Picks the collage that shows the images largest when zoomed to fit the viewport; a wider viewport never picks a narrower one.
+ */
 export function pack(images: NodeData[], gap: number, obstacles: Rect[] = [], aspect = 1): Map<string, Rect> {
   const origin = bounds(images);
   const sorted = [...images].sort((a, b) => b.height - a.height || b.width - a.width || a.id.localeCompare(b.id));
   const area = images.reduce((sum, image) => sum + (image.width + gap) * (image.height + gap), 0);
   const minimum = images.reduce((widest, image) => Math.max(widest, image.width), 0);
   const target = Number.isFinite(aspect) && aspect > 0 ? Math.max(.2, Math.min(5, aspect)) : 1;
-  const widths = [.7, .9, 1.1, 1.4].map(factor => Math.max(minimum, Math.sqrt(area * target) * factor));
-  let best = new Map<string, Rect>(), bestScore = Infinity;
-  for (const width of widths) {
-    const result = arrange(sorted, origin, width, gap, obstacles, false);
+  // The smallest viewport-shaped area around a collage, on a log scale: smaller shows the images larger when zoomed to fit.
+  const fit = (box: Rect): number => Math.log(Math.max(box.width, box.height * target) * Math.max(box.height, box.width / target));
+  // The candidate widths are the same for every viewport, which keeps the choice consistent as the viewport changes.
+  // Trying those nearest the viewport's shape first lets the rest be abandoned early.
+  const widths = new Set<number>();
+  for (let width = Math.sqrt(area * .2) * .7; width <= Math.sqrt(area * 5) * 1.4; width *= 1.12) widths.add(Math.max(minimum, width));
+  const ideal = Math.sqrt(area * target);
+  let best = new Map<string, Rect>(), bestFit = Infinity, bestAspect = 0;
+  for (const width of [...widths].sort((a, b) => Math.abs(Math.log(a / ideal)) - Math.abs(Math.log(b / ideal)))) {
+    const result = arrange(sorted, origin, width, gap, obstacles, false, placed => fit(placed) > bestFit + 1e-9);
+    if (!result) continue;
     const box = bounds([...result.values()]);
-    const score = box.width * box.height * (1 + Math.abs(Math.log(box.width / box.height / target)) * .3);
-    if (score < bestScore) { best = result; bestScore = score; }
+    const score = fit(box), shape = box.width / box.height;
+    // Collages that fit equally well tie; preferring the wider one keeps the choice consistent.
+    if (score < bestFit - 1e-9 || (score <= bestFit + 1e-9 && shape > bestAspect)) { best = result; bestFit = Math.min(bestFit, score); bestAspect = shape; }
   }
   return best;
 }
 
 export function orderedPack(images: NodeData[], gap: number, obstacles: Rect[] = []): Map<string, Rect> {
   const origin = bounds(images);
-  return arrange(images, origin, images.reduce((widest, image) => Math.max(widest, image.width), origin.width), gap, obstacles, true);
+  return arrange(images, origin, images.reduce((widest, image) => Math.max(widest, image.width), origin.width), gap, obstacles, true)!;
 }

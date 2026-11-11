@@ -4,18 +4,29 @@ A small extension to Obsidian's native Canvas for drawing and painting reference
 
 Select image cards, or a group containing images, then right-click:
 
-- **Arrange images** offers **Optimal**, **By name**, **By path**, **By order**, **By addition**, and **Randomly**. Optimal packs images into a collage shaped for the current viewport. Sorted arrangements use rows; repeating a sort on the same images reverses its order. Packing avoids other cards.
+- **Arrange images** offers **Optimal**, **By name**, **By path**, **By order**, **By addition**, and **Randomly**. Optimal packs images into the collage that shows them largest when zoomed to fit the current viewport, so a wider window never gives a narrower collage. Sorted arrangements use rows; repeating a sort on the same images reverses its order. Packing avoids other cards.
 - **Align images** offers **Left**, **Right**, **Top**, **Bottom**, **Stack**, **Distribute horizontal**, and **Distribute vertical**. Edge alignment matches the chosen edges. Stack centers images in a pile while retaining their native layer order. Distribution forms a row or column with the configured spacing.
 - **Normalize images** offers **Height**, **Width**, **Size**, **Area**, and **Scale**. Choose **From first** or **Average** at the top of the submenu; the choice is remembered. Size matches the longest side. Area matches displayed area. Scale matches displayed size as a fraction of each image's source resolution. All preserve image proportions, subject to Canvas's pixel rounding.
-- **Normalize images → Scale selection…** is an additional percentage transform that scales the whole arrangement, including spacing.
+- **Normalize images → Scale selection…** scales the whole arrangement by a percentage, including spacing.
 
 **From first** uses the first selected image. Selecting a group uses its images in reading order (top to bottom, then left to right). **By order** uses this same selection order as the Canvas equivalent of PureRef's hierarchy order. **By name** uses the filename; **By path** uses the full vault path.
 
 **By addition** remembers when this plugin first sees each image card, independently of native layer order. Existing cards start with their initial Canvas order because their earlier insertion history cannot be recovered. Addition order is stored locally by canvas path and card ID, including removed cards so native undo can restore their place. It follows canvas and folder renames. No extra hierarchy or metadata is added to `.canvas` files.
 
-These actions also appear in the command palette. They affect selected image cards and images fully contained within selected groups. Notes and edges are retained. Groups expand when necessary to keep their images inside. Every layout operation is one native undo step; image source files are never resized or cropped.
+These actions also appear in the command palette. They affect selected image cards and images fully contained within selected groups. Notes and edges are retained. Afterwards, each group that contained the images fits its boundary around everything inside it, growing or shrinking, as PureRef groups adjust to their content; nested groups fit before their parents. Every layout operation is one native undo step; image source files are never resized or cropped.
 
 Right-click a group and choose **Optimize group** to fit its boundary around all fully contained cards, including notes and nested groups, without moving or resizing the contents. Padding is 20 canvas pixels on the sides and bottom, and 40 at the top. Empty groups stay unchanged. Select several groups to optimize them together in one undo step; selected nested groups are fitted before their parents. The command palette also offers **Optimize selected groups**, which can be assigned a hotkey in Obsidian settings.
+
+## Differences from PureRef
+
+The image actions follow [PureRef](https://www.pureref.com/handbook/images/organize/) and approximate it where its handbook is silent or Canvas works differently:
+
+- **Optimal** packs for the canvas viewport's shape when you run it, standing in for fitting the current window.
+- **By order** uses selection order, the Canvas stand-in for PureRef's hierarchy order.
+- **By addition** keeps its order in this plugin's data rather than in the `.canvas` file, so canvases stay native. A canvas restored from the trash gets its order back.
+- Canvas groups contain whatever lies fully inside their bounds, so a group that grows to fit its images can take in a nearby card.
+
+The plugin adds two things of its own: acting on all images inside a selected group, and **Optimize group**.
 
 ## Asset folders
 
@@ -40,12 +51,8 @@ npm test
 
 For live testing, build in `<Vault>/.obsidian/plugins/canvas-art-ref-plugin/` and enable **Canvas Art Ref** under **Settings → Community plugins**. Release files are `main.js` and `manifest.json`. Generated bundles, dependencies, and personal settings are excluded from source control.
 
-Native integration checks are in `tests/native-*.js`. Run `native-image-actions.js` using `scripts/obsidian-eval.ps1 -ScriptPath tests/native-image-actions.js -Vault "My vault"` to exercise all 18 actions, first/average normalization, native undo/redo, persistent addition order, menus, and reload cleanup in a separate test canvas. Results remain on `window.canvasArtRefImageChecks` and in the ignored `output/image-action-checks.json`. The earlier import and note checks use `native-setup.js`, followed by the smoke, interactions, lifecycle, and dialogs scripts. Tests do not edit existing boards.
+Native integration checks run inside the open Obsidian vault through the Obsidian CLI. Build first, then run `npm run test:native` (add `-- vault=<name>` to pick a vault, or script names such as `group` to run only those). It reloads the plugin, then runs `tests/native-*.js` in order and stops at the first failure: commands, imports, notes, dialogs and reloading (smoke); all 18 image actions with native undo/redo, addition order and menus; clipboard and drop routing; and group optimization. Reports are written to `canvas-art-ref-native` in the system temp folder.
 
-Run `native-storage-routing.js` with the same helper to check clipboard imports across event listener microtasks, image drops, missing image folders, and existing-file reuse. It removes its temporary canvas and imported fixtures, restores the previous tab, and writes `output/storage-routing-checks.json`.
+Each script works only inside its own folder under `Canvas Art Ref tests/` at the vault root. Pass or fail, it then removes that folder, its plugin data entries, the settings it changed and the tabs it opened, and restores the previous tab. Files it created outside the test folder are removed and reported as a failure. The shared setup and cleanup live in `tests/native-harness.js`. Tests never open or edit existing boards.
 
-After successful image-action checks, run `native-image-cleanup.js` with the same helper to close their tabs and remove only their generated scratch folders. The previous active tab is restored. The test report remains in `output/`.
-
-Run `native-group-actions.js` with the same helper to check group menus, commands, padding, unchanged card data, nested selections, and native undo/redo. It cleans up its scratch canvas automatically, restores the previous tab, and writes `output/group-action-checks.json`.
-
-Canvas's live editing API is undocumented. The plugin uses 1.12.3 API typings and has been tested in Obsidian 1.14.4; native integration may require maintenance after app updates. Mobile-compatible APIs are used, but testing on physical iOS and Android devices is still needed.
+Canvas's live editing API is undocumented. The plugin uses 1.12.3 API typings and has been tested in Obsidian 1.14.4; native integration may require maintenance after app updates. Every use of Canvas, importer and menu internals lives in `src/canvas/adapter.ts`; node tests replace it with the in-memory adapter in `tests/fakes.mjs`, and the native checks verify the real one. Mobile-compatible APIs are used, but testing on physical iOS and Android devices is still needed.

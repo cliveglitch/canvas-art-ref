@@ -1,5 +1,5 @@
 import { TFolder, type App } from 'obsidian';
-import { folderSetting } from '../settings';
+import { folderSetting } from '../plugin-data';
 
 export async function ensureFolder(app: App, setting: string): Promise<TFolder> {
   const path = folderSetting(setting);

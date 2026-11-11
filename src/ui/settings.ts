@@ -1,11 +1,6 @@
 import { Modal, Notice, PluginSettingTab, Setting, type App, type Plugin } from 'obsidian';
-import { folderSetting, type Folders, type Settings } from '../settings';
+import { folderSetting, gapSetting, type Folders, type PluginData } from '../plugin-data';
 import { ensureFolder } from '../storage/folders';
-
-export interface SettingsHost extends Plugin {
-  settings: Settings;
-  saveSettings(): Promise<void>;
-}
 
 function fields(container: HTMLElement, values: Folders, inherited?: Folders): void {
   for (const key of ['images', 'notes'] as const) {
@@ -22,20 +17,17 @@ async function validate(app: App, values: Folders): Promise<Folders> {
 }
 
 export class CanvasFoldersModal extends Modal {
-  constructor(private host: SettingsHost, private path: string) { super(host.app); }
+  constructor(app: App, private data: PluginData, private path: string) { super(app); }
   onOpen(): void {
     this.setTitle('Canvas folders');
     this.contentEl.createEl('p', { text: 'Leave blank to inherit plugin settings. Use / for the vault root. Changes affect new files only.' });
-    const board = this.host.settings.canvases[this.path];
-    const values = { images: board?.images ?? '', notes: board?.notes ?? '' };
-    fields(this.contentEl, values, this.host.settings);
+    const board = this.data.canvasFolders(this.path);
+    const values = { images: board.images ?? '', notes: board.notes ?? '' };
+    fields(this.contentEl, values, this.data.defaults);
     new Setting(this.contentEl).addButton(button => button.setButtonText('Save').setCta().onClick(async () => {
       button.setDisabled(true);
       try {
-        const folders = await validate(this.app, values);
-        if (folders.images || folders.notes) this.host.settings.canvases[this.path] = folders;
-        else delete this.host.settings.canvases[this.path];
-        await this.host.saveSettings(); this.close();
+        await this.data.setCanvasFolders(this.path, await validate(this.app, values)); this.close();
       } catch (error) { new Notice(error instanceof Error ? error.message : 'Could not save folders.'); button.setDisabled(false); }
     }));
   }
@@ -43,22 +35,19 @@ export class CanvasFoldersModal extends Modal {
 }
 
 export class CanvasArtRefSettingsTab extends PluginSettingTab {
-  constructor(private host: SettingsHost) { super(host.app, host); }
+  constructor(plugin: Plugin, private data: PluginData) { super(plugin.app, plugin); }
   display(): void {
     this.containerEl.empty();
     this.containerEl.createEl('p', { text: 'Defaults for native canvases. Override folders from each canvas menu. Leave blank to use Obsidian settings; use / for the vault root.' });
-    const values = { images: this.host.settings.images, notes: this.host.settings.notes };
+    const values = this.data.defaults;
     fields(this.containerEl, values);
-    let gap = String(this.host.settings.gap);
+    let gap = String(this.data.gap);
     new Setting(this.containerEl).setName('Image spacing').setDesc('Spacing for image arrangements and distribution, from 0 to 200 canvas pixels.').addText(text => text.setValue(gap).onChange(value => gap = value));
     new Setting(this.containerEl).addButton(button => button.setButtonText('Save defaults').setCta().onClick(async () => {
       button.setDisabled(true);
       try {
-        const spacing = Number(gap);
-        if (!Number.isFinite(spacing) || spacing < 0 || spacing > 200) throw new Error('Enter spacing from 0 to 200.');
-        const folders = await validate(this.app, values);
-        Object.assign(this.host.settings, folders, { gap: spacing });
-        await this.host.saveSettings(); new Notice('Folder settings saved.');
+        const spacing = gapSetting(Number(gap));
+        await this.data.setDefaults(await validate(this.app, values), spacing); new Notice('Folder settings saved.');
       } catch (error) { new Notice(error instanceof Error ? error.message : 'Could not save settings.'); }
       button.setDisabled(false);
     }));

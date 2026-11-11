@@ -1,5 +1,4 @@
-import type { NodeData, Rect } from '../canvas/types';
-import { bounds } from '../canvas/selection';
+import { bounds, type NodeData, type Rect } from '../canvas/data';
 
 export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'stack' | 'horizontal' | 'vertical';
 

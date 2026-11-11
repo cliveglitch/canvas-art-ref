@@ -1,37 +1,30 @@
-import { Menu } from 'obsidian';
-import type { ImageActions } from '../canvas/actions';
-import type { NativeCanvas, NodeData } from '../canvas/types';
-import { alignActions, arrangeActions, normalizeActions } from '../canvas/action-catalog';
-import { ScaleModal } from './dialogs';
-import type { App } from 'obsidian';
+import type { Menu } from 'obsidian';
+import { submenu, type Board } from '../canvas/adapter';
+import { optimizeGroups, sections, type ImageActions } from '../canvas/image-actions';
 
-// setSubmenu exists in the native Menu API but is not in the published typings.
-interface SubmenuItem { setSubmenu(): Menu }
-export function groupMenu(menu: Menu, canvas: NativeCanvas, groups: NodeData[], optimize: () => void): void {
-  if (canvas.readonly || !groups.length) return;
-  menu.addItem(item => item.setTitle(groups.length === 1 ? 'Optimize group' : 'Optimize groups').setIcon('minimize').onClick(optimize));
-}
-
-export function imageMenu(menu: Menu, canvas: NativeCanvas, images: NodeData[], actions: ImageActions, app: App): void {
-  if (canvas.readonly || !images.length) return;
-  for (const [title, icon, entries] of [
-    ['Arrange images', 'layout-grid', arrangeActions],
-    ['Align images', 'align-start-horizontal', alignActions],
-    ['Normalize images', 'scaling', normalizeActions],
-  ] as const) {
-    menu.addItem(item => {
-      item.setTitle(title).setIcon(icon);
-      const submenu = (item as typeof item & SubmenuItem).setSubmenu();
-      if (entries === normalizeActions) {
-        submenu.addItem(entry => entry.setTitle('From first').setChecked(actions.source === 'first').onClick(() => actions.setSource('first')));
-        submenu.addItem(entry => entry.setTitle('Average').setChecked(actions.source === 'average').onClick(() => actions.setSource('average')));
-        submenu.addSeparator();
-      }
-      for (const entry of entries) submenu.addItem(item => item.setTitle(entry.title).onClick(() => actions.run(canvas, entry.action, images)));
-      if (entries === normalizeActions) {
-        submenu.addSeparator();
-        submenu.addItem(entry => entry.setTitle('Scale selection…').onClick(() => new ScaleModal(app, percent => actions.scale(canvas, percent, images)).open()));
-      }
-    });
+/** Add the image action submenus and Optimize group to a canvas context menu, acting on the cards selected as it opens. */
+export function actionMenu(menu: Menu, board: Board, actions: ImageActions, clicked?: string): void {
+  if (actions.available(board, 'images', clicked)) {
+    const selection = actions.targets(board, 'images', clicked);
+    for (const section of sections) {
+      menu.addItem(item => {
+        item.setTitle(section.title).setIcon(section.icon);
+        const entries = submenu(item);
+        if (section.id === 'normalize') {
+          entries.addItem(entry => entry.setTitle('From first').setChecked(actions.source === 'first').onClick(() => actions.setSource('first')));
+          entries.addItem(entry => entry.setTitle('Average').setChecked(actions.source === 'average').onClick(() => actions.setSource('average')));
+          entries.addSeparator();
+        }
+        for (const entry of section.entries) {
+          // Scale selection is a separate transform after the normalizations.
+          if (entry.operation === 'ask-percent') entries.addSeparator();
+          entries.addItem(item => item.setTitle(entry.title).onClick(() => actions.run(board, entry, selection)));
+        }
+      });
+    }
+  }
+  if (actions.available(board, 'groups', clicked)) {
+    const groups = actions.targets(board, 'groups', clicked);
+    menu.addItem(item => item.setTitle(groups.length === 1 ? 'Optimize group' : 'Optimize groups').setIcon('minimize').onClick(() => actions.run(board, optimizeGroups, groups)));
   }
 }
