@@ -7,7 +7,7 @@ const nativeTest = async (name, body) => {
   const id = Date.now().toString(36);
   const root = base + '/' + name + ' ' + id;
   const prefix = 'Canvas Art Ref test ' + id;
-  const pluginId = 'canvas-art-ref-plugin';
+  const pluginId = 'canvas-art-ref';
   const plugin = () => app.plugins.plugins[pluginId];
   const data = () => plugin().pluginData;
   const inside = path => path === root || path.startsWith(root + '/');

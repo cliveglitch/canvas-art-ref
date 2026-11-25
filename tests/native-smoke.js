@@ -24,7 +24,7 @@ nativeTest('smoke', async t => {
   const canvas = await t.open(file);
   const geometry = data => data.nodes.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })).sort((a, b) => a.id.localeCompare(b.id));
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const command = id => app.commands.commands['canvas-art-ref-plugin:' + id];
+  const command = id => app.commands.commands['canvas-art-ref:' + id];
   const newModal = previous => [...document.querySelectorAll('.modal-container')].find(element => !previous.has(element));
 
   // Layout commands and native history.
@@ -32,7 +32,7 @@ nativeTest('smoke', async t => {
   const before = structuredClone(canvas.getData());
   const historyBefore = canvas.history.current;
   canvas.selectOnly(canvas.nodes.get('demo-group'));
-  check(app.commands.executeCommandById('canvas-art-ref-plugin:pack-images'), 'Native selection command available');
+  check(app.commands.executeCommandById('canvas-art-ref:pack-images'), 'Native selection command available');
   await until(() => canvas.history.current > historyBefore);
   const packed = structuredClone(canvas.getData());
   check(canvas.history.current === historyBefore + 1, 'Packing creates exactly one native undo step');
@@ -45,7 +45,7 @@ nativeTest('smoke', async t => {
   check(same(geometry(canvas.getData()), geometry(packed)), 'One redo restores the packed layout');
   canvas.selectOnly(canvas.nodes.get('demo-group'));
   const matchHistory = canvas.history.current;
-  app.commands.executeCommandById('canvas-art-ref-plugin:match-image-height');
+  app.commands.executeCommandById('canvas-art-ref:match-image-height');
   await until(() => canvas.history.current > matchHistory);
   const heights = [...canvas.nodes.values()].filter(n => n.id.startsWith('demo-image')).map(n => n.getData().height);
   check(Math.max(...heights) - Math.min(...heights) < .001, 'Matching heights works on a selected group');
@@ -120,19 +120,19 @@ nativeTest('smoke', async t => {
   check(created(), 'Create-note dialog saves a Markdown file directly in the configured folder');
 
   // Reloading the plugin.
-  await app.plugins.disablePlugin('canvas-art-ref-plugin');
+  await app.plugins.disablePlugin('canvas-art-ref');
   const nativeImport = app.importAttachments;
   const nativeParent = app.fileManager.getNewFileParent;
   const nativeCreation = canvas.showCreationMenu;
   const canvasParent = app.fileManager.getNewFileParent(path, 'Another.canvas').path;
   check(!command('pack-images'), 'Disabling removes plugin commands');
-  await app.plugins.enablePlugin('canvas-art-ref-plugin');
+  await app.plugins.enablePlugin('canvas-art-ref');
   check(app.fileManager.getNewFileParent(path, 'Another.canvas').path === canvasParent, 'Creating another native canvas keeps its normal destination');
   check(app.fileManager.getNewFileParent(path, 'Character.v2').path === notesFolder, 'Dotted Markdown note names use the notes destination');
-  await app.plugins.disablePlugin('canvas-art-ref-plugin');
+  await app.plugins.disablePlugin('canvas-art-ref');
   check(app.importAttachments === nativeImport && app.fileManager.getNewFileParent === nativeParent && canvas.showCreationMenu === nativeCreation, 'Unloading restores native import, note-folder and menu methods');
-  await app.plugins.enablePlugin('canvas-art-ref-plugin');
-  check(Object.keys(app.commands.commands).filter(id => id.startsWith('canvas-art-ref-plugin:')).length === 22, 'Reloading registers each command once');
+  await app.plugins.enablePlugin('canvas-art-ref');
+  check(Object.keys(app.commands.commands).filter(id => id.startsWith('canvas-art-ref:')).length === 22, 'Reloading registers each command once');
   canvas.selectOnly(canvas.nodes.get('demo-group'));
   let menu;
   const reference = app.workspace.on('canvas:node-menu', (value, node) => { if (node.id === 'demo-group') menu = value; });

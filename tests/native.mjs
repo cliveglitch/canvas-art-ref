@@ -17,9 +17,9 @@ await mkdir(reports, { recursive: true });
 
 const obsidian = (...command) => promisify(execFile)('obsidian', [...vault, ...command], { maxBuffer: 1 << 24, timeout: 600000 });
 // Test the freshly built main.js rather than the copy Obsidian loaded earlier.
-await obsidian('plugin:reload', 'id=canvas-art-ref-plugin');
+await obsidian('plugin:reload', 'id=canvas-art-ref');
 // Read the scripts from the installed plugin, which keeps the CLI argument short.
-const read = file => `app.vault.adapter.read(app.plugins.manifests['canvas-art-ref-plugin'].dir + '/tests/${file}')`;
+const read = file => `app.vault.adapter.read(app.plugins.manifests['canvas-art-ref'].dir + '/tests/${file}')`;
 for (const script of selected) {
   const code = `Promise.all([${read('native-harness.js')}, ${read(script)}]).then(([harness, test]) => eval(harness + '\\n' + test))`;
   const { stdout } = await obsidian('eval', 'code=' + code);

@@ -4,7 +4,7 @@ nativeTest('group actions', async t => {
   const { check, wait } = t;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const optimize = () => t.plugin().actions.run(t.plugin().canvas.active(), t.plugin().actions.entries.find(entry => entry.id === 'optimize-groups'));
-  const command = app.commands.commands['canvas-art-ref-plugin:optimize-groups'];
+  const command = app.commands.commands['canvas-art-ref:optimize-groups'];
   // Each card matches its image's proportions, so Canvas never corrects a card's size while the images load.
   const svg = async (name, width, height) => (await t.create(name + '.svg', `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#6f9b9a"/></svg>`)).path;
   const square = await svg('Square', 100, 100), wide = await svg('Wide', 200, 100), frame = await svg('Frame', 100, 80);

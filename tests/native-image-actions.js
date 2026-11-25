@@ -47,7 +47,7 @@ nativeTest('image actions', async t => {
   for (const [action, command] of definitions) {
     await restore();
     const before = structuredClone(canvas.getData()), current = canvas.history.current;
-    check(app.commands.commands['canvas-art-ref-plugin:' + command]?.checkCallback(true), action + ': native command available');
+    check(app.commands.commands['canvas-art-ref:' + command]?.checkCallback(true), action + ': native command available');
     await run(action);
     const after = structuredClone(canvas.getData());
     check(canvas.history.current === current + 1, action + ': exactly one undo step');
@@ -88,18 +88,18 @@ nativeTest('image actions', async t => {
   const recorded = t.additionOrder(path);
   check(same(recorded.filter(id => selectedIds.includes(id)), ['a', 'b', 'c']), 'Addition order tracks native node insertion');
   await t.plugin().pluginData.flush();
-  await app.plugins.disablePlugin('canvas-art-ref-plugin');
+  await app.plugins.disablePlugin('canvas-art-ref');
   const nativeAdd = canvas.addNode;
-  await app.plugins.enablePlugin('canvas-art-ref-plugin');
+  await app.plugins.enablePlugin('canvas-art-ref');
   check(same(t.additionOrder(path), recorded), 'Addition order survives plugin reload');
   check(t.sizeSource() === 'first', 'Normalization source survives plugin reload');
   await restore();
   canvas.nodes.get('a').updateZIndex();
   await run('addition');
   check(same(visualOrder(), ['a', 'b', 'c']), 'Addition arrangement ignores changed native layer order');
-  await app.plugins.disablePlugin('canvas-art-ref-plugin');
+  await app.plugins.disablePlugin('canvas-art-ref');
   check(canvas.addNode === nativeAdd, 'Unloading restores native node creation');
-  await app.plugins.enablePlugin('canvas-art-ref-plugin');
+  await app.plugins.enablePlugin('canvas-art-ref');
   await restore(['group']);
   canvas.nodes.get('group').attach(); canvas.nodes.get('group').render();
   let menu;
@@ -118,7 +118,7 @@ nativeTest('image actions', async t => {
     await wait(30);
   } finally { menu?.hide(); }
   canvas.setReadonly(true);
-  check(definitions.every(([, id]) => !app.commands.commands['canvas-art-ref-plugin:' + id].checkCallback(true)), 'Read-only mode disables all 18 image commands');
+  check(definitions.every(([, id]) => !app.commands.commands['canvas-art-ref:' + id].checkCallback(true)), 'Read-only mode disables all 18 image commands');
   canvas.setReadonly(false); select([]);
-  check(definitions.every(([, id]) => !app.commands.commands['canvas-art-ref-plugin:' + id].checkCallback(true)), 'All image commands remain selection-based');
+  check(definitions.every(([, id]) => !app.commands.commands['canvas-art-ref:' + id].checkCallback(true)), 'All image commands remain selection-based');
 });
