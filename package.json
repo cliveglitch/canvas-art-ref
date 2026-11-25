@@ -1,5 +1,5 @@
 {
-  "name": "canvas-art-ref-plugin",
+  "name": "canvas-art-ref",
   "version": "0.2.0",
   "private": true,
   "description": "Image arrangement and asset folders for native Obsidian Canvas.",
