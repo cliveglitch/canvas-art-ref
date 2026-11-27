@@ -1,6 +1,6 @@
 {
   "name": "canvas-art-ref",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Image arrangement and asset folders for native Obsidian Canvas.",
   "type": "module",
@@ -18,7 +18,7 @@
     "eslint-plugin-obsidianmd": "^0.4.0",
     "globals": "^17.6.0",
     "jiti": "^2.7.0",
-    "obsidian": "1.12.3",
+    "obsidian": "^1.14.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.59.1"
   }

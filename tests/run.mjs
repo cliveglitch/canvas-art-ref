@@ -4,4 +4,5 @@ import './layout-plan.mjs';
 import './image-sizes.mjs';
 import './image-actions.mjs';
 import './plugin-data.mjs';
+import './settings-tab.mjs';
 import './storage-routing.mjs';

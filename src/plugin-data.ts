@@ -13,7 +13,7 @@ interface State extends Folders {
   canvases: Record<string, Partial<Folders>>;
 }
 const initial = (): State => ({ images: '', notes: '', gap: 24, normalizeSource: 'average', imageOrder: {}, canvases: {} });
-const gapLimits = { min: 0, max: 200 } as const;
+export const gapLimits ={ min: 0, max: 200 } as const;
 
 /** Empty means inherit; '/' explicitly selects the vault root. Throws for paths outside the vault or in hidden folders. */
 export function folderSetting(input: string): string {
